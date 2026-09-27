@@ -75,6 +75,9 @@
 #include "custompipes.h"
 #include "screendroplets.h"
 #include "VarConsole.h"
+#ifdef REVC_PERF_HUD
+#include "perf.h"
+#endif
 #ifdef USE_OUR_VERSIONING
 #include "GitSHA1.h"
 #endif
@@ -1679,6 +1682,10 @@ Idle(void *arg)
 	if (gbShowTimebars)
 		tbDisplay();
 
+#ifdef REVC_PERF_HUD
+	Hud_Draw();
+#endif
+
 	DoRWStuffEndOfFrame();
 
 	POP_MEMID();	// MEMID_RENDER
@@ -1718,6 +1725,9 @@ FrontendIdle(void)
 	DoFade();
 	Render2dStuffAfterFade();
 	CFont::DrawFonts();
+#ifdef REVC_PERF_HUD
+	Hud_Draw();
+#endif
 	DoRWStuffEndOfFrame();
 }
 

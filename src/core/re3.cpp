@@ -50,6 +50,9 @@
 #include "Zones.h"
 
 #include "crossplatform.h"
+#ifdef REVC_PERF_HUD
+#include "perf.h"
+#endif
 
 #ifndef _WIN32
 #include "assert.h"
@@ -550,6 +553,9 @@ bool LoadINISettings()
 #ifdef NEW_RENDERER
 	ReadIniIfExists("Rendering", "NewRenderer", &gbNewRenderer);
 #endif
+#ifdef REVC_PERF_HUD
+	ReadIniIfExists("Perf", "PerfHud", &gPerfHudEnabled);
+#endif
 
 #ifdef PROPER_SCALING
 	ReadIniIfExists("Draw", "ProperScaling", &CDraw::ms_bProperScaling);	
@@ -658,6 +664,9 @@ void SaveINISettings()
 	StoreIni("Rendering", "BackfaceCulling", gBackfaceCulling);
 #ifdef NEW_RENDERER
 	StoreIni("Rendering", "NewRenderer", gbNewRenderer);
+#endif
+#ifdef REVC_PERF_HUD
+	StoreIni("Perf", "PerfHud", gPerfHudEnabled);
 #endif
 
 #ifdef PROPER_SCALING	

@@ -14,6 +14,12 @@ long _dwOperatingSystemVersion;
 #include "skeleton.h"
 #include "platform.h"
 #include "crossplatform.h"
+#ifdef REVC_PERF_HUD
+#include "perf.h"
+// librw internal counter (declared in rwgl3impl.h, not in the public header;
+// same forward declaration as re3/src/skel/gbm/gbm.cpp).
+namespace rw { namespace gl3 { int gl3_get_and_reset_drawcalls(void); } }
+#endif
 
 #include "main.h"
 #include "FileMgr.h"
@@ -97,6 +103,14 @@ const char *_psGetUserFilesFolder()
 	return szUserFiles;
 }
 
+#ifdef REVC_PERF_HUD
+// Perf HUD metrics (ms), fed from the main loop / showRaster. Ported from
+// re3/src/skel/gbm/gbm.cpp: on the direct-present path eglSwapBuffers with
+// vsync IS the GPU sync point, so gpuMs is measured around RwCameraShowRaster.
+double gPerfGpuMs = 0.0;
+int gPerfDrawCalls = 0;
+#endif
+
 /*
  *****************************************************************************
  */
@@ -119,6 +133,11 @@ psCameraBeginUpdate(RwCamera *camera)
 void
 psCameraShowRaster(RwCamera *camera)
 {
+#ifdef REVC_PERF_HUD
+	// Swap with vsync is itself the GPU sync point on the direct-present
+	// path; time it to isolate GPU-bound cost (feeds the perf HUD).
+	double t0 = psTimer();
+#endif
 #ifdef LEGACY_MENU_OPTIONS
 	if (FrontEndMenuManager.m_PrefsVsync || FrontEndMenuManager.m_bMenuActive)
 #else
@@ -127,6 +146,11 @@ psCameraShowRaster(RwCamera *camera)
 		RwCameraShowRaster(camera, PSGLOBAL(window), rwRASTERFLIPWAITVSYNC);
 	else
 		RwCameraShowRaster(camera, PSGLOBAL(window), rwRASTERFLIPDONTWAIT);
+#ifdef REVC_PERF_HUD
+	gPerfGpuMs = psTimer() - t0;
+	// Snapshot draw call counter after the GPU sync; reset for next frame.
+	gPerfDrawCalls = rw::gl3::gl3_get_and_reset_drawcalls();
+#endif
 
 	return;
 }
@@ -1672,13 +1696,40 @@ main(int argc, char *argv[])
 						if ( RwInitialised )
 						{
 							if (!FrontEndMenuManager.m_PrefsFrameLimiter){
+#ifdef REVC_PERF_HUD
+								// rsIDLE runs the whole frame (update + render +
+								// showRaster). CPU-only work = total minus the
+								// GPU wait measured in psCameraShowRaster.
+								// Pause-menu open edge toggles the HUD (same
+								// interaction as re3/GBM).
+								static double sLastWall = 0.0;
+								static bool sPrevMenuActive = false;
+								bool menuActive = !!FrontEndMenuManager.m_bMenuActive;
+								if(menuActive && !sPrevMenuActive) Hud_Toggle();
+								sPrevMenuActive = menuActive;
+
+								double t0 = psTimer();
 								RsEventHandler(rsIDLE, (void *)TRUE);
+								double idleMs = psTimer() - t0;
+								double cpuMs = idleMs - gPerfGpuMs;
+								if(cpuMs < 0.0) cpuMs = 0.0;
+
+								HudMetrics m = {};
+								m.frameMs = sLastWall != 0.0 ? (t0 - sLastWall) : 0.0;
+								sLastWall = t0;
+								m.cpuMs = cpuMs;
+								m.gpuMs = gPerfGpuMs;
+								m.drawCalls = gPerfDrawCalls;
+								Hud_Update(&m);
+#else
+								RsEventHandler(rsIDLE, (void *)TRUE);
+#endif
 							}
 							else {
+								float frameTime = 1000.0f / (float)RsGlobal.maxFPS;
 #ifdef REVC_R36S
 								// Sleep-based frame limiter: yield the CPU while waiting
 								// for the next frame instead of busy-waiting (P1).
-								float frameTime = 1000.0f / (float)RsGlobal.maxFPS;
 								float remaining = frameTime - ms;
 								if (remaining > 2.0f)
 									SDL_Delay((Uint32)(remaining - 1.5f));

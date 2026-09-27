@@ -328,6 +328,11 @@ enum Config {
 	#undef SCREEN_DROPLETS
 #endif
 
+// Perf metrics HUD (FPS / CPU vs GPU ms / draw calls / clocks / temp),
+// drawn with the engine font. Toggle in Display Settings (persisted to
+// reVC.ini [Perf] PerfHud); opening the pause menu flips it at runtime.
+//#define REVC_PERF_HUD
+
 #ifdef REVC_R36S
 	// Release-ish build for the handheld: no debug timers/menus (P8).
 	// NOTE: FINAL would also enable USE_MY_DOCUMENTS, which we do not

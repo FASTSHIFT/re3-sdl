@@ -30,6 +30,9 @@
 #include "IniFile.h"
 #include "CarCtrl.h"
 #include "Population.h"
+#ifdef REVC_PERF_HUD
+#include "perf.h"
+#endif
 
 // Menu screens array is at the bottom of the file.
 
@@ -88,7 +91,16 @@
 		MENUACTION_CFO_SELECT, "FED_MBL", { new CCFOSelect((int8*)&CPostFX::MotionBlurOn, "Graphics", "MotionBlur", off_on, 2, false) }, 0, 0, MENUALIGN_LEFT,
 #else
 	#define POSTFX_SELECTORS
-#endif	
+#endif
+
+#ifdef REVC_PERF_HUD
+	// Perf overlay switch (reVC R36S port): FPS / CPU vs GPU ms / draw calls /
+	// clocks / temp, drawn with the engine font. Stored in reVC.ini [Perf].
+	#define PERF_HUD_TOGGLE \
+		MENUACTION_CFO_SELECT, "FED_PRF", { new CCFOSelect(&gPerfHudEnabled, "Perf", "PerfHud", off_on, 2, false) }, 0, 0, MENUALIGN_LEFT,
+#else
+	#define PERF_HUD_TOGGLE
+#endif
 
 #ifdef INVERT_LOOK_FOR_PAD
 	#define INVERT_PAD_SELECTOR MENUACTION_CFO_SELECT, "FEC_ILU", { new CCFOSelect((int8*)&CPad::bInvertLook4Pad, "Controller", "InvertPad", off_on, 2, false) }, 0, 0, MENUALIGN_LEFT,
@@ -451,6 +463,7 @@ CMenuScreenCustom aScreens[] = {
 		CUTSCENE_BORDERS_TOGGLE
 		FREE_CAM_TOGGLE
 		POSTFX_SELECTORS
+		PERF_HUD_TOGGLE
 		// re3.cpp inserts here pipeline selectors if neo/neo.txd exists and EXTENDED_PIPELINES defined
 		MENUACTION_RESTOREDEF,	"FET_DEF", {nil, SAVESLOT_NONE, MENUPAGE_DISPLAY_SETTINGS}, 320, 0, MENUALIGN_CENTER,
 		MENUACTION_GOBACK,		"FEDS_TB", {nil, SAVESLOT_NONE, MENUPAGE_NONE}, 320, 0, MENUALIGN_CENTER,
@@ -466,6 +479,7 @@ CMenuScreenCustom aScreens[] = {
 		MENUACTION_RADARMODE,	"FED_RDR", { nil, SAVESLOT_NONE, MENUPAGE_DISPLAY_SETTINGS }, 0, 0, MENUALIGN_LEFT,
 		MENUACTION_HUD,			"FED_HUD", { nil, SAVESLOT_NONE, MENUPAGE_DISPLAY_SETTINGS }, 0, 0, MENUALIGN_LEFT,
 		MENUACTION_SUBTITLES,	"FED_SUB", { nil, SAVESLOT_NONE, MENUPAGE_DISPLAY_SETTINGS }, 0, 0, MENUALIGN_LEFT,
+		PERF_HUD_TOGGLE
 		MENUACTION_CFO_DYNAMIC,	"FET_DEF", { new CCFODynamic(nil, nil, nil, nil, RestoreDefDisplay) }, 320, 0, MENUALIGN_CENTER,
 		MENUACTION_GOBACK,		"FEDS_TB", { nil, SAVESLOT_NONE, MENUPAGE_NONE}, 320, 0, MENUALIGN_CENTER,
 	},
