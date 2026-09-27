@@ -179,7 +179,11 @@ CustomFrontendOptionsPopulate(void)
 		CFileMgr::CloseFile(fd);
 	}
 
-#if 0
+#ifdef REVC_CHINESE
+	// Chinese localization ships its assets in the Japanese slots
+	// (JAPANESE.GXT + fonts_j.txd from tools/l10n), so gate the menu entry
+	// on the same build option. Display name stays FEL_JAP (GXT key); swap
+	// the GXT string if a dedicated label is wanted.
 	if (fd = CFileMgr::OpenFile("text/japanese.gxt")) {
 		if (fd2 = CFileMgr::OpenFile("models/fonts_j.txd")) {
 			FrontendOptionAddDynamic("FEL_JAP", 0, 0, MENUALIGN_CENTER, nil, nil, LangJapSelect, nil, nil);
