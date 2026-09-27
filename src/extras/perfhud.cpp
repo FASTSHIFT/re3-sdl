@@ -36,7 +36,7 @@ Hud_Enabled(void)
 
 // ---- metrics (front end) --------------------------------------------------
 static HudMetrics sM;
-static char sLines[10][48];
+static char sLines[8][48];
 static int sNumLines = 0;
 static HudStatsCtx *sStats = 0;
 
@@ -56,10 +56,6 @@ Hud_Update(const HudMetrics *m)
 	snprintf(sLines[sNumLines++], sizeof(sLines[0]), "FPS:%.0f %.1fms", fps, sM.frameMs);
 	snprintf(sLines[sNumLines++], sizeof(sLines[0]), "CPU:%.1f GPU:%.1f", sM.cpuMs, sM.gpuMs);
 	snprintf(sLines[sNumLines++], sizeof(sLines[0]), "DC:%d", (int)sM.drawCalls);
-	// Stage breakdown of the CPU time (Idle phases)
-	if(sM.procMs + sM.rlMs + sM.preMs + sM.sceneMs > 0.0)
-		snprintf(sLines[sNumLines++], sizeof(sLines[0]), "P:%.1f R:%.1f", sM.procMs, sM.rlMs),
-		snprintf(sLines[sNumLines++], sizeof(sLines[0]), "E:%.1f S:%.1f", sM.preMs, sM.sceneMs);
 	if(st.cpuPct >= 0) snprintf(sLines[sNumLines++], sizeof(sLines[0]), "SYS:%d%%", st.cpuPct);
 	if(st.rssMb >= 0 && st.sysMemPct >= 0)
 		snprintf(sLines[sNumLines++], sizeof(sLines[0]), "MEM:%dM %d%%", st.rssMb, st.sysMemPct);
@@ -70,6 +66,43 @@ Hud_Update(const HudMetrics *m)
 	else if(st.armMhz > 0)
 		snprintf(sLines[sNumLines++], sizeof(sLines[0]), "A:%dM", st.armMhz);
 	if(st.tempMilliC >= 0) snprintf(sLines[sNumLines++], sizeof(sLines[0]), "T:%.1fC", st.tempMilliC / 1000.0);
+
+	// ---- periodic log line (every 120 frames) -----------------------------
+	// Averages over the window; carries the full stage breakdown plus
+	// min/max frame time, which is too verbose for the on-screen HUD.
+	{
+		static double aF = 0, aC = 0, aG = 0, aP = 0, aR = 0, aE = 0, aS = 0;
+		static double minF = 1e9, maxF = 0;
+		static double aDC = 0;
+		static int n = 0;
+		aF += sM.frameMs;
+		aC += sM.cpuMs;
+		aG += sM.gpuMs;
+		aP += sM.procMs;
+		aR += sM.rlMs;
+		aE += sM.preMs;
+		aS += sM.sceneMs;
+		aDC += sM.drawCalls;
+		if(sM.frameMs > 0.0) {
+			if(sM.frameMs < minF) minF = sM.frameMs;
+			if(sM.frameMs > maxF) maxF = sM.frameMs;
+		}
+		if(++n >= 120) {
+			double other = (aC / n) - (aP + aR + aE + aS) / n;
+			if(other < 0.0) other = 0.0;
+			printf("[perf] frame=%.2fms(min %.1f max %.1f) fps=%.0f | cpu=%.2f gpu=%.2f | "
+			       "proc=%.2f rl=%.2f pre=%.2f scene=%.2f other=%.2f | dc=%.0f | "
+			       "sys=%d%% mem=%dM/%d%% a=%dM g=%dM t=%.1fC\n",
+			       aF / n, minF, maxF, aF > 0 ? 1000.0 / (aF / n) : 0.0,
+			       aC / n, aG / n, aP / n, aR / n, aE / n, aS / n, other,
+			       aDC / n, st.cpuPct, st.rssMb, st.sysMemPct, st.armMhz, st.gpuMhz,
+			       st.tempMilliC >= 0 ? st.tempMilliC / 1000.0 : 0.0);
+			aF = aC = aG = aP = aR = aE = aS = aDC = 0;
+			minF = 1e9;
+			maxF = 0;
+			n = 0;
+		}
+	}
 }
 
 // ---- drawing --------------------------------------------------------------
