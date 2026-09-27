@@ -484,7 +484,17 @@ void *CdStreamThread(void *param)
 			gCdStreamThreadStatus = 1;
 #endif
 			pid_t tid = syscall(SYS_gettid);
+#ifdef REVC_R36S
+			// Streaming reads on the R36S SD card are the p90 frame-time
+			// spikes (max 80-150ms windows). The original nice +1 made the
+			// reader LOWER priority than the game thread, so a busy main
+			// thread starved the IO and CdStreamSync waited on a pending
+			// read. On a 4-core machine there is spare CPU; let the reader
+			// run ABOVE the game thread instead (-2).
+			int ret = setpriority(PRIO_PROCESS, tid, getpriority(PRIO_PROCESS, getpid()) - 2);
+#else
 			int ret = setpriority(PRIO_PROCESS, tid, getpriority(PRIO_PROCESS, getpid()) + 1);
+#endif
 		}
 #endif
 		if ( pChannel->nStatus == STREAM_NONE )
