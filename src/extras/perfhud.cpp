@@ -5,7 +5,7 @@
  * The Pi version drew a 5x7 bitmap font into the RGB565 readback buffer.
  * There is no readback on the R36S, so this version renders with the engine's
  * own CFont + CSprite2d after the game's 2D pass, from Idle()/FrontendIdle().
- * Enabled with REVC_HUD=1; opening the pause menu toggles it (Hud_Toggle).
+ * Controlled exclusively via the PERF HUD menu entry (reVC.ini [Perf] PerfHud).
  */
 #ifdef REVC_PERF_HUD
 
@@ -29,15 +29,6 @@ Hud_Enabled(void)
 {
 	if(gPerfHudEnabled < 0) gPerfHudEnabled = getenv("REVC_HUD") ? 1 : 0;
 	return gPerfHudEnabled != 0;
-}
-
-void
-Hud_Toggle(void)
-{
-	// Resolve the initial state first so the first toggle flips from the
-	// REVC_HUD default rather than from the uninitialised -1.
-	if(gPerfHudEnabled < 0) gPerfHudEnabled = getenv("REVC_HUD") ? 1 : 0;
-	gPerfHudEnabled = !gPerfHudEnabled;
 }
 
 // ---- metrics (front end) --------------------------------------------------

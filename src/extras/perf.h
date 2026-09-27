@@ -33,10 +33,6 @@ extern int8_t gPerfHudEnabled;
 int
 Hud_Enabled(void);
 
-// Flip the enabled state at runtime; hooked to the pause-menu open edge so
-// opening the menu toggles the overlay (same interaction as re3/GBM).
-void
-Hud_Toggle(void);
 
 // Feed the latest per-frame metrics + sample telemetry + remember lines.
 // Call once per frame, BEFORE rendering 2D stuff.

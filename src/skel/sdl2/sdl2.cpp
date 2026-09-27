@@ -1695,20 +1695,18 @@ main(int argc, char *argv[])
 						float ms = (float)CTimer::GetCurrentTimeInCycles() / (float)CTimer::GetCyclesPerMillisecond();
 						if ( RwInitialised )
 						{
+#ifdef REVC_PERF_HUD
+							// rsIDLE runs the whole frame (update + render +
+							// showRaster). CPU-only work = total minus the
+							// GPU wait measured in psCameraShowRaster.
+							// Runs regardless of the frame limiter setting;
+							// the overlay itself is controlled only via the
+							// PERF HUD menu entry (reVC.ini [Perf] PerfHud).
+							static double sLastWall = 0.0;
+							double t0 = psTimer();
+#endif
 							if (!FrontEndMenuManager.m_PrefsFrameLimiter){
 #ifdef REVC_PERF_HUD
-								// rsIDLE runs the whole frame (update + render +
-								// showRaster). CPU-only work = total minus the
-								// GPU wait measured in psCameraShowRaster.
-								// Pause-menu open edge toggles the HUD (same
-								// interaction as re3/GBM).
-								static double sLastWall = 0.0;
-								static bool sPrevMenuActive = false;
-								bool menuActive = !!FrontEndMenuManager.m_bMenuActive;
-								if(menuActive && !sPrevMenuActive) Hud_Toggle();
-								sPrevMenuActive = menuActive;
-
-								double t0 = psTimer();
 								RsEventHandler(rsIDLE, (void *)TRUE);
 								double idleMs = psTimer() - t0;
 								double cpuMs = idleMs - gPerfGpuMs;
@@ -1734,8 +1732,24 @@ main(int argc, char *argv[])
 								if (remaining > 2.0f)
 									SDL_Delay((Uint32)(remaining - 1.5f));
 #endif
-								if (frameTime < ms)
+								if (frameTime < ms){
+#ifdef REVC_PERF_HUD
 									RsEventHandler(rsIDLE, (void *)TRUE);
+									double idleMs = psTimer() - t0;
+									double cpuMs = idleMs - gPerfGpuMs;
+									if(cpuMs < 0.0) cpuMs = 0.0;
+
+									HudMetrics m = {};
+									m.frameMs = sLastWall != 0.0 ? (t0 - sLastWall) : 0.0;
+									sLastWall = t0;
+									m.cpuMs = cpuMs;
+									m.gpuMs = gPerfGpuMs;
+									m.drawCalls = gPerfDrawCalls;
+									Hud_Update(&m);
+#else
+									RsEventHandler(rsIDLE, (void *)TRUE);
+#endif
+								}
 							}
 						}
 						break;
