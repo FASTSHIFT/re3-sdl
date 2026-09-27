@@ -362,3 +362,7 @@ codewarrior/Release/
 codewarrior/Debug/
 
 src/extras/GitSHA1.cppbuild-r36s/
+
+# l10n translation batches (generated, large; keep PROMPT.txt)
+batches/
+apikey.txt
