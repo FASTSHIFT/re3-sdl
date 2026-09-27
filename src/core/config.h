@@ -322,6 +322,28 @@ enum Config {
 #define NEW_RENDERER		// leeds-like world rendering, needs librw
 #endif
 
+#ifdef REVC_LEAN_FX
+	// R36S/Pi-class GPUs: drop per-frame full-screen copies.
+	// Needs the backbuffer, so SCREEN_DROPLETS must go too (P2/P3).
+	#undef SCREEN_DROPLETS
+#endif
+
+#ifdef REVC_R36S
+	// Release-ish build for the handheld: no debug timers/menus (P8).
+	// NOTE: FINAL would also enable USE_MY_DOCUMENTS, which we do not
+	// want (game dir must stay writable on the SD card), so we only
+	// take the debug toggles FINAL would remove.
+	#ifdef DEBUGMENU
+		#undef DEBUGMENU
+	#endif
+	#ifdef TIMEBARS
+		#undef TIMEBARS
+	#endif
+	#ifdef CHATTYSPLASH
+		#undef CHATTYSPLASH
+	#endif
+#endif
+
 #define FIX_SPRITES	// fix sprites aspect ratio(moon, coronas, particle etc)
 
 #ifndef EXTENDED_COLOURFILTER

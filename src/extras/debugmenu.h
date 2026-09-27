@@ -201,4 +201,28 @@ inline DebugMenuEntry *DebugMenuAddVarBool8(const char *path, const char *name, 
 {
 	return DebugMenuAddVarBool8(path, name, (int8_t*)ptr, triggerFunc);
 }
+#else
+// No DEBUGMENU: provide empty stubs so callers compile unchanged
+#define SETTWEAKPATH(path)
+#define TWEAKPATH
+#define TWEAKFUNC(v)
+#define TWEAKFUNCN(v, name)
+#define TWEAKBOOL(v)
+#define TWEAKBOOLN(v, name)
+#define TWEAKINT32(v, lower, upper, step)
+#define TWEAKINT32N(v, lower, upper, step, name)
+#define TWEAKUINT32(v, lower, upper, step)
+#define TWEAKUINT32N(v, lower, upper, step, name)
+#define TWEAKINT16(v, lower, upper, step)
+#define TWEAKINT16N(v, lower, upper, step, name)
+#define TWEAKUINT16(v, lower, upper, step)
+#define TWEAKUINT16N(v, lower, upper, step, name)
+#define TWEAKINT8(v, lower, upper, step)
+#define TWEAKINT8N(v, lower, upper, step, name)
+#define TWEAKUINT8(v, lower, upper, step)
+#define TWEAKUINT8N(v, lower, upper, step, name)
+#define TWEAKFLOAT(v, lower, upper, step)
+#define TWEAKFLOATN(v, lower, upper, step, name)
+#define TWEAKSWITCH(v, lower, upper, str, f)
+#define TWEAKSWITCHN(v, lower, upper, str, f, name)
 #endif

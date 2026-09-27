@@ -731,11 +731,20 @@ CMenuManager::CheckSliderMovement(int value)
 		m_PrefsBrightness = Clamp(m_PrefsBrightness, 0, 384);
 		break;
 	case MENUACTION_DRAWDIST:
+#ifdef REVC_R36S
+		// allow lower draw distance on low-end handhelds (P5)
+		if(value > 0)
+			m_PrefsLOD += ((1.8f - 0.5f) / MENUSLIDER_LOGICAL_BARS);
+		else
+			m_PrefsLOD -= ((1.8f - 0.5f) / MENUSLIDER_LOGICAL_BARS);
+		m_PrefsLOD = Clamp(m_PrefsLOD, 0.5f, 1.8f);
+#else
 		if(value > 0)
 			m_PrefsLOD += ((1.8f - 0.925f) / MENUSLIDER_LOGICAL_BARS);
 		else
 			m_PrefsLOD -= ((1.8f - 0.925f) / MENUSLIDER_LOGICAL_BARS);
 		m_PrefsLOD = Clamp(m_PrefsLOD, 0.925f, 1.8f);
+#endif
 		CRenderer::ms_lodDistScale = m_PrefsLOD;
 		break;
 
@@ -1565,7 +1574,11 @@ CMenuManager::DrawStandardMenus(bool activeScreen)
 							ProcessSlider(m_PrefsBrightness / 384.0f, SLIDER_Y(70.0f), HOVEROPTION_INCREASE_BRIGHTNESS, HOVEROPTION_DECREASE_BRIGHTNESS, SCREEN_WIDTH, true);
 							break;
 						case MENUACTION_DRAWDIST:
+#ifdef REVC_R36S
+							ProcessSlider((m_PrefsLOD - 0.5f) / 1.3f, SLIDER_Y(99.0f), HOVEROPTION_INCREASE_DRAWDIST, HOVEROPTION_DECREASE_DRAWDIST, SCREEN_WIDTH, true);
+#else
 							ProcessSlider((m_PrefsLOD - 0.925f) / 0.875f, SLIDER_Y(99.0f), HOVEROPTION_INCREASE_DRAWDIST, HOVEROPTION_DECREASE_DRAWDIST, SCREEN_WIDTH, true);
+#endif
 							break;
 						case MENUACTION_MUSICVOLUME:
 							if(m_nPrefsAudio3DProviderIndex != NO_AUDIO_PROVIDER)

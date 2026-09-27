@@ -1248,7 +1248,12 @@ windowIconifyCB(int iconified) {
 void inputEventHandler() {
 	SDL_Event event;
 
+#ifdef REVC_R36S
+	// Drain the whole event queue each frame (P9)
+    while (SDL_PollEvent(&event)) {
+#else
     if (SDL_PollEvent(&event)) {
+#endif
 		switch (event.type) {
 		case SDL_KEYDOWN:	/* fall-through */
 		case SDL_KEYUP:
@@ -1666,8 +1671,21 @@ main(int argc, char *argv[])
 						float ms = (float)CTimer::GetCurrentTimeInCycles() / (float)CTimer::GetCyclesPerMillisecond();
 						if ( RwInitialised )
 						{
-							if (!FrontEndMenuManager.m_PrefsFrameLimiter || (1000.0f / (float)RsGlobal.maxFPS) < ms)
+							if (!FrontEndMenuManager.m_PrefsFrameLimiter){
 								RsEventHandler(rsIDLE, (void *)TRUE);
+							}
+							else {
+#ifdef REVC_R36S
+								// Sleep-based frame limiter: yield the CPU while waiting
+								// for the next frame instead of busy-waiting (P1).
+								float frameTime = 1000.0f / (float)RsGlobal.maxFPS;
+								float remaining = frameTime - ms;
+								if (remaining > 2.0f)
+									SDL_Delay((Uint32)(remaining - 1.5f));
+#endif
+								if (frameTime < ms)
+									RsEventHandler(rsIDLE, (void *)TRUE);
+							}
 						}
 						break;
 					}
