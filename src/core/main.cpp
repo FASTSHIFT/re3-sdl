@@ -77,6 +77,7 @@
 #include "VarConsole.h"
 #ifdef REVC_PERF_HUD
 #include "perf.h"
+extern "C" double psTimer(void); // skel/platform.h
 #endif
 #ifdef USE_OUR_VERSIONING
 #include "GitSHA1.h"
@@ -1533,6 +1534,12 @@ Idle(void *arg)
 
 	tbInit();
 
+#ifdef REVC_PERF_HUD
+	// Stage timers (perf HUD); reset each frame before the phases run.
+	double stageT0 = psTimer();
+	gStageProcMs = gStageRLMs = gStagePreMs = gStageSceneMs = 0.0;
+#endif
+
 	CSprite2d::InitPerFrame();
 	CFont::InitPerFrame();
 
@@ -1540,7 +1547,13 @@ Idle(void *arg)
 	CPointLights::InitPerFrame();
 
 	tbStartTimer(0, "CGame::Process");
+#ifdef REVC_PERF_HUD
+	stageT0 = psTimer();
+#endif
 	CGame::Process();
+#ifdef REVC_PERF_HUD
+	gStageProcMs = psTimer() - stageT0;
+#endif
 	tbEndTimer("CGame::Process");
 	POP_MEMID();
 
@@ -1586,11 +1599,23 @@ Idle(void *arg)
 			CRenderer::ClearForFrame();
 		}
 #endif
+#ifdef REVC_PERF_HUD
+		stageT0 = psTimer();
+#endif
 		CRenderer::ConstructRenderList();
+#ifdef REVC_PERF_HUD
+		gStageRLMs = psTimer() - stageT0;
+#endif
 		tbEndTimer("CnstrRenderList");
 
 		tbStartTimer(0, "PreRender");
+#ifdef REVC_PERF_HUD
+		stageT0 = psTimer();
+#endif
 		CRenderer::PreRender();
+#ifdef REVC_PERF_HUD
+		gStagePreMs = psTimer() - stageT0;
+#endif
 		tbEndTimer("PreRender");
 
 #ifdef FIX_BUGS
@@ -1618,7 +1643,13 @@ Idle(void *arg)
 #endif
 
 		tbStartTimer(0, "RenderScene");
+#ifdef REVC_PERF_HUD
+		stageT0 = psTimer();
+#endif
 		RenderScene();
+#ifdef REVC_PERF_HUD
+		gStageSceneMs = psTimer() - stageT0;
+#endif
 		tbEndTimer("RenderScene");
 
 #ifdef EXTENDED_PIPELINES

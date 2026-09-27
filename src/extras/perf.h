@@ -20,6 +20,12 @@ struct HudMetrics {
 	double cpuMs;     // game CPU (RsEventHandler rsIDLE) time
 	double gpuMs;     // showRaster/swap (GPU scene wait)
 	double drawCalls; // GL draw calls this frame (from librw counter)
+
+	// Stage breakdown of cpuMs (Idle() phases; 0 when not measured).
+	double procMs;      // CGame::Process (game logic update)
+	double rlMs;        // ConstructRenderList (visibility/LOD)
+	double preMs;       // PreRender (entities' pre-render)
+	double sceneMs;     // RenderScene + RenderEffects (GL submission)
 };
 
 // ---- front end (perfhud.cpp) ----
@@ -38,6 +44,10 @@ Hud_Enabled(void);
 // Call once per frame, BEFORE rendering 2D stuff.
 void
 Hud_Update(const HudMetrics *m);
+
+// Stage timings from Idle() (REVC_PERF_HUD). Written by main.cpp stage
+// timers, read by the skeleton when it fills HudMetrics.
+extern double gStageProcMs, gStageRLMs, gStagePreMs, gStageSceneMs;
 
 // Draw the HUD with the engine font/sprite system. Call from the 2D render
 // phase (after Render2dStuffAfterFade, before DoRWStuffEndOfFrame).

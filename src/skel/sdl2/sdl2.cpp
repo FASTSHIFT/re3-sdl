@@ -1718,6 +1718,10 @@ main(int argc, char *argv[])
 								m.cpuMs = cpuMs;
 								m.gpuMs = gPerfGpuMs;
 								m.drawCalls = gPerfDrawCalls;
+								m.procMs = gStageProcMs;
+								m.rlMs = gStageRLMs;
+								m.preMs = gStagePreMs;
+								m.sceneMs = gStageSceneMs;
 								Hud_Update(&m);
 #else
 								RsEventHandler(rsIDLE, (void *)TRUE);
@@ -1745,6 +1749,10 @@ main(int argc, char *argv[])
 									m.cpuMs = cpuMs;
 									m.gpuMs = gPerfGpuMs;
 									m.drawCalls = gPerfDrawCalls;
+									m.procMs = gStageProcMs;
+									m.rlMs = gStageRLMs;
+									m.preMs = gStagePreMs;
+									m.sceneMs = gStageSceneMs;
 									Hud_Update(&m);
 #else
 									RsEventHandler(rsIDLE, (void *)TRUE);

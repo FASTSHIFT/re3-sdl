@@ -117,6 +117,22 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang
                 -Wpedantic
         )
     endif()
+    if(REVC_R36S)
+        # P7: targeted optimization for the RK3326 (4x Cortex-A53).
+        # LTO intentionally NOT enabled (save-file miscompile history on re3).
+        target_compile_options(${EXECUTABLE}
+            PRIVATE
+                -mcpu=cortex-a53
+                -fno-math-errno
+                -fno-trapping-math
+                -ffunction-sections
+                -fdata-sections
+        )
+        target_link_options(${EXECUTABLE}
+            PRIVATE
+                -Wl,--gc-sections
+        )
+    endif()
 elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
     target_compile_options(${EXECUTABLE}
         PUBLIC

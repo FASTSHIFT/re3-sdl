@@ -24,6 +24,9 @@
 // -1 = not yet resolved from the env/ini (see Hud_Enabled).
 int8_t gPerfHudEnabled = -1;
 
+// Stage timings from Idle() (see main.cpp; zero-init each frame there).
+double gStageProcMs = 0.0, gStageRLMs = 0.0, gStagePreMs = 0.0, gStageSceneMs = 0.0;
+
 int
 Hud_Enabled(void)
 {
@@ -33,7 +36,7 @@ Hud_Enabled(void)
 
 // ---- metrics (front end) --------------------------------------------------
 static HudMetrics sM;
-static char sLines[8][48];
+static char sLines[10][48];
 static int sNumLines = 0;
 static HudStatsCtx *sStats = 0;
 
@@ -53,6 +56,10 @@ Hud_Update(const HudMetrics *m)
 	snprintf(sLines[sNumLines++], sizeof(sLines[0]), "FPS:%.0f %.1fms", fps, sM.frameMs);
 	snprintf(sLines[sNumLines++], sizeof(sLines[0]), "CPU:%.1f GPU:%.1f", sM.cpuMs, sM.gpuMs);
 	snprintf(sLines[sNumLines++], sizeof(sLines[0]), "DC:%d", (int)sM.drawCalls);
+	// Stage breakdown of the CPU time (Idle phases)
+	if(sM.procMs + sM.rlMs + sM.preMs + sM.sceneMs > 0.0)
+		snprintf(sLines[sNumLines++], sizeof(sLines[0]), "P:%.1f R:%.1f", sM.procMs, sM.rlMs),
+		snprintf(sLines[sNumLines++], sizeof(sLines[0]), "E:%.1f S:%.1f", sM.preMs, sM.sceneMs);
 	if(st.cpuPct >= 0) snprintf(sLines[sNumLines++], sizeof(sLines[0]), "SYS:%d%%", st.cpuPct);
 	if(st.rssMb >= 0 && st.sysMemPct >= 0)
 		snprintf(sLines[sNumLines++], sizeof(sLines[0]), "MEM:%dM %d%%", st.rssMb, st.sysMemPct);
