@@ -103,7 +103,13 @@ def build_charmap(glyphs):
 
 def encode_value(v, charmap):
     """Encode one string to GXT wchars following the JP scheme: control tokens
-    carry the 0x8000 flag on every char (engine token parsers match on it)."""
+    carry the 0x8000 flag on every char (engine token parsers match on it).
+
+    Newlines are stripped first: the Sergeanur txt format ends every value
+    with a blank line, so parsed values carry a trailing newline that is
+    format noise (the stock GXT contains no 0x000A codepoints at all - the
+    engine wraps text via its message system, never via newline codes)."""
+    v = v.replace("\n", "")
     out = []
     i = 0
     while i < len(v):
