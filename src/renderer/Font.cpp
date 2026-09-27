@@ -71,7 +71,7 @@ int16 CFont::Size[MAX_FONTS][210] = {
 		18, 10, 17, 17, 17, 17, 17, 15, 12, 16,  5, 30, 30, 30, 30, 30,
 		//   A,  B,  C,  D,  E,  F,  G,  H,  I,  J,  K,  L,  M,  N,  O,
 		12, 16, 19, 16, 19, 18, 18, 17, 22, 11, 17, 18, 18, 30, 22, 19,
-		//P, Q,  R,  S,  T,  U,  V,  W,  X,  Y,  Z, ??, ??, ??,  ¡,  \,
+		//P, Q,  R,  S,  T,  U,  V,  W,  X,  Y,  Z, ??, ??, ??,  ï¿½,  \,
 		#ifdef FIX_BUGS
 		22, 19, 19, 20, 18, 19, 19, 29, 19, 18, 19, 19, 33, 33, 10, 19,
 		#else
@@ -81,11 +81,11 @@ int16 CFont::Size[MAX_FONTS][210] = {
 		12, 14, 11, 11, 16, 11, 12, 14, 14, 10, 13, 12, 10, 19, 18, 12,
 		//p, q,  r,  s,  t,  u,  v,  w,  x,  y,  z, ??, ??, ??, ??, ??,
 		16, 13, 13, 11, 12, 15, 12, 15, 13, 12, 12, 37, 33, 37, 35, 37,
-		//À, Á,  Â,  Ä,  Æ,  Ç,  È,  É,  Ê,  Ë,  Ì,  Í,  Î,  Ï,  Ò,  Ó,
+		//ï¿½, ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,
 		16, 16, 16, 16, 33, 17, 18, 18, 18, 18, 11, 11, 11, 11, 19, 19,
-		//Ô, Ö,  Ù,  Ú,  Û,  Ü,  ß,  à,  á,  â,  ä,  æ,  ç,  è,  é,  ê,
+		//ï¿½, ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,
 		19, 19, 19, 19, 19, 19, 15, 14, 14, 14, 14, 20, 14, 11, 11, 11,
-		//ë, ì,  í,  î,  ï,  ò,  ó,  ô,  ö,  ù,  ú,  û,  ü,  Ñ,  ñ,  ¿,
+		//ï¿½, ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,
 		#ifdef FIX_BUGS
 		11, 10, 10, 10, 10, 12, 12, 12, 12, 15, 15, 15, 15, 22, 18, 21,
 		#else
@@ -110,7 +110,7 @@ int16 CFont::Size[MAX_FONTS][210] = {
 		20,  7, 20, 20, 21, 20, 20, 19, 21, 20,  8, 30, 24, 30, 24, 19,
 		//TM,A,  B,  C,  D,  E,  F,  G,  H,  I,  J,  K,  L,  M,  N,  O,
 		20, 22, 22, 21, 22, 18, 18, 22, 22,  9, 14, 21, 18, 27, 21, 24,
-		//P, Q,  R,  S,  T,  U,  V,  W,  X,  Y,  Z, *I,  \, *I,  ¡,  °,
+		//P, Q,  R,  S,  T,  U,  V,  W,  X,  Y,  Z, *I,  \, *I,  ï¿½,  ï¿½,
 		#ifdef FIX_BUGS
 		22, 22, 23, 20, 19, 23, 22, 31, 23, 23, 21, 25, 13, 30,  7, 19,
 		#else
@@ -120,11 +120,11 @@ int16 CFont::Size[MAX_FONTS][210] = {
 		10, 17, 17, 16, 17, 17, 11, 17, 17,  7,  7, 18,  7, 25, 17, 17,
 		//p, q,  r,  s,  t,  u,  v,  w,  x,  y,  z, *I, *I, $2, (2, )2,
 		17, 17, 11, 17, 11, 17, 18, 25, 19, 18, 17, 28, 26, 20, 15, 15,
-		//À, Á,  Â,  Ä,  Æ,  Ç,  È,  É,  Ê,  Ë,  Ì,  Í,  Î,  Ï,  Ò,  Ó,
+		//ï¿½, ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,
 		20, 20, 20, 20, 29, 22, 19, 19, 19, 19,  9,  9,  9,  9, 23, 23,
-		//Ô, Ö,  Ù,  Ú,  Û,  Ü,  ß,  à,  á,  â,  ä,  æ,  ç,  è,  é,  ê,
+		//ï¿½, ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,
 		23, 23, 24, 24, 24, 24, 20, 19, 17, 17, 17, 30, 16, 17, 17, 17,
-		//ë, ì,  í,  î,  ï,  ò,  ó,  ô,  ö,  ù,  ú,  û,  ü,  Ñ,  ñ,  ¿,
+		//ï¿½, ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,
 		#ifdef FIX_BUGS
 		17, 11, 11, 15, 12, 17, 17, 17, 17, 17, 17, 17, 17, 21, 17, 19,
 		#else
@@ -134,9 +134,9 @@ int16 CFont::Size[MAX_FONTS][210] = {
 		20, 18, 19, 19, 21, 19, 19, 19, 19, 19, 16, 19, 19, 19, 20, 19,
 		//F2,G2,H2, I2, J2, K2, L2, M2, N2, O2, P2, Q2, R2, S2, T2, U2,
 		16, 19, 19,  9, 19, 20, 14, 29, 19, 19, 19, 19, 19, 19, 21, 19,
-		//V2,W2,X2, Y2, Z2, À2, Á2, Â2, Ä2, Æ2, Ç2, È2, É2, Ê2, Ë2, Ì2,
+		//V2,W2,X2, Y2, Z2, ï¿½2, ï¿½2, ï¿½2, ï¿½2, ï¿½2, ï¿½2, ï¿½2, ï¿½2, ï¿½2, ï¿½2, ï¿½2,
 		20, 32, 20, 19, 19, 19, 19, 19, 19, 29, 19, 19, 19, 19, 19,  9,
-		//Í2,Î2,Ï2, Ò2, Ó2, Ô2, Ö2, Ù2, Ú2, Û2, Ü2, ß2, Ñ2, ¿2, '2, .2,
+		//ï¿½2,ï¿½2,ï¿½2, ï¿½2, ï¿½2, ï¿½2, ï¿½2, ï¿½2, ï¿½2, ï¿½2, ï¿½2, ï¿½2, ï¿½2, ï¿½2, '2, .2,
 		#ifdef FIX_BUGS
 		 9,  9,  9, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 10,  9,
 		#else
@@ -191,17 +191,17 @@ int16 CFont::Size[MAX_FONTS][210] = {
 			18, 10, 17, 17, 17, 17, 17, 15, 12, 16,  5, 30, 30, 30, 30, 30,
 			//   A,  B,  C,  D,  E,  F,  G,  H,  I,  J,  K,  L,  M,  N,  O,
 			12, 16, 19, 16, 19, 18, 18, 17, 22, 11, 17, 18, 18, 30, 22, 19,
-			//P, Q,  R,  S,  T,  U,  V,  W,  X,  Y,  Z, ??, ??, ??,  ¡,  \,
+			//P, Q,  R,  S,  T,  U,  V,  W,  X,  Y,  Z, ??, ??, ??,  ï¿½,  \,
 			22, 19, 19, 20, 18, 19, 19, 29, 19, 18, 19, 19, 33, 33, 10, 19,
 			//??,a,  b,  c,  d,  e,  f,  g,  h,  i,  j,  k,  l,  m,  n,  o,
 			12, 14, 11, 11, 16, 11, 12, 14, 14, 10, 13, 12, 10, 19, 18, 12,
 			//p, q,  r,  s,  t,  u,  v,  w,  x,  y,  z, ??, ??, ??, ??, ??,
 			16, 13, 13, 11, 12, 15, 12, 15, 13, 12, 12, 37, 33, 37, 35, 37,
-			//À, Á,  Â,  Ä,  Æ,  Ç,  È,  É,  Ê,  Ë,  Ì,  Í,  Î,  Ï,  Ò,  Ó,
+			//ï¿½, ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,
 			16, 16, 16, 16, 33, 17, 18, 18, 18, 18, 11, 11, 11, 11, 19, 19,
-			//Ô, Ö,  Ù,  Ú,  Û,  Ü,  ß,  à,  á,  â,  ä,  æ,  ç,  è,  é,  ê,
+			//ï¿½, ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,
 			19, 19, 19, 19, 19, 19, 15, 14, 14, 14, 14, 20, 14, 11, 11, 11,
-			//ë, ì,  í,  î,  ï,  ò,  ó,  ô,  ö,  ù,  ú,  û,  ü,  Ñ,  ñ,  ¿,
+			//ï¿½, ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,
 			11, 10, 10, 10, 10, 12, 12, 12, 12, 15, 15, 15, 15, 22, 18, 21,
 			//i,BLANKS
 			10, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19,
@@ -222,25 +222,25 @@ int16 CFont::Size[MAX_FONTS][210] = {
 			20,  7, 20, 20, 21, 20, 20, 19, 21, 20,  8, 30, 24, 30, 24, 19,
 			//TM,A,  B,  C,  D,  E,  F,  G,  H,  I,  J,  K,  L,  M,  N,  O,
 			20, 22, 22, 21, 22, 18, 18, 22, 22,  9, 14, 21, 18, 27, 21, 24,
-			//P, Q,  R,  S,  T,  U,  V,  W,  X,  Y,  Z, *I,  \, *I,  ¡,  °,
+			//P, Q,  R,  S,  T,  U,  V,  W,  X,  Y,  Z, *I,  \, *I,  ï¿½,  ï¿½,
 			22, 22, 23, 20, 19, 23, 22, 31, 23, 23, 21, 25, 13, 30,  7, 19,
 			//(C),a, b,  c,  d,  e,  f,  g,  h,  i,  j,  k,  l,  m,  n,  o,
 			10, 17, 17, 16, 17, 17, 11, 17, 17,  7,  7, 18,  7, 25, 17, 17,
 			//p, q,  r,  s,  t,  u,  v,  w,  x,  y,  z, *I, *I, $2, (2, )2,
 			17, 17, 11, 17, 11, 17, 18, 25, 19, 18, 17, 28, 26, 20, 15, 15,
-			//À, Á,  Â,  Ä,  Æ,  Ç,  È,  É,  Ê,  Ë,  Ì,  Í,  Î,  Ï,  Ò,  Ó,
+			//ï¿½, ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,
 			20, 20, 20, 20, 29, 22, 19, 19, 19, 19,  9,  9,  9,  9, 23, 23,
-			//Ô, Ö,  Ù,  Ú,  Û,  Ü,  ß,  à,  á,  â,  ä,  æ,  ç,  è,  é,  ê,
+			//ï¿½, ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,
 			23, 23, 24, 24, 24, 24, 20, 19, 17, 17, 17, 30, 16, 17, 17, 17,
-			//ë, ì,  í,  î,  ï,  ò,  ó,  ô,  ö,  ù,  ú,  û,  ü,  Ñ,  ñ,  ¿,
+			//ï¿½, ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,  ï¿½,
 			17, 11, 11, 15, 12, 17, 17, 17, 17, 17, 17, 17, 17, 21, 17, 19,
 			//02,12,22, 32, 42, 52, 62, 72, 82, 92, :2, A2, B2, C2, D2, E2,
 			20, 18, 19, 19, 21, 19, 19, 19, 19, 19, 16, 19, 19, 19, 20, 19,
 			//F2,G2,H2, I2, J2, K2, L2, M2, N2, O2, P2, Q2, R2, S2, T2, U2,
 			16, 19, 19,  9, 19, 20, 14, 29, 19, 19, 19, 19, 19, 19, 21, 19,
-			//V2,W2,X2, Y2, Z2, À2, Á2, Â2, Ä2, Æ2, Ç2, È2, É2, Ê2, Ë2, Ì2,
+			//V2,W2,X2, Y2, Z2, ï¿½2, ï¿½2, ï¿½2, ï¿½2, ï¿½2, ï¿½2, ï¿½2, ï¿½2, ï¿½2, ï¿½2, ï¿½2,
 			20, 32, 20, 19, 19, 19, 19, 19, 19, 29, 19, 19, 19, 19, 19,  9,
-			//Í2,Î2,Ï2, Ò2, Ó2, Ô2, Ö2, Ù2, Ú2, Û2, Ü2, ß2, Ñ2, ¿2, '2, .2,
+			//ï¿½2,ï¿½2,ï¿½2, ï¿½2, ï¿½2, ï¿½2, ï¿½2, ï¿½2, ï¿½2, ï¿½2, ï¿½2, ï¿½2, ï¿½2, ï¿½2, '2, .2,
 			 9,  9,  9, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 10,  9,
 			//space, unprop
 			10, 20
@@ -531,9 +531,9 @@ CFont::PrintChar(float x, float y, wchar c)
 	float yoff = c / 16;
 #ifdef MORE_LANGUAGES
 	if (IsJapaneseFont()) {
-		w = 21.0f;
-		xoff = (float)(c % 48);
-		yoff = c / 48;
+		w = CJK_CELLW;
+		xoff = (float)(c % CJK_COLS);
+		yoff = c / CJK_COLS;
 	}
 #endif
 
@@ -576,28 +576,33 @@ CFont::PrintChar(float x, float y, wchar c)
 				xoff / 16.0f, (yoff + 1.0f) / 12.8f - 0.009f,
 				(xoff + 1.0f) / 16.0f - 0.001f, (yoff + 1.0f) / 12.8f - 0.0021f + 0.01f);
 #ifdef MORE_LANGUAGES
-	/*}else if (IsJapaneseFont()) {
+	}else if (IsJapaneseFont()) {
+		// CJK path (REVC_CHINESE): atlas cell = c, grid CJK_COLS wide.
+		// Geometry matches tools/l10n/gen_cn_font.py (see Font.h macros).
+		float w = CJK_CELLW;
+		float xoff = (float)(c % CJK_COLS);
+		float yoff = c / CJK_COLS;
 		if (Details.dropShadowPosition != 0) {
-			CSprite2d::AddSpriteToBank(Details.bank + Details.style,	// BUG: game doesn't add bank
+			CSprite2d::AddToBuffer(
 				CRect(x + SCREEN_SCALE_X(Details.dropShadowPosition),
 					y + SCREEN_SCALE_Y(Details.dropShadowPosition),
-					x + SCREEN_SCALE_X(Details.dropShadowPosition) + 32.0f * Details.scaleX * 1.0f,
-					y + SCREEN_SCALE_Y(Details.dropShadowPosition) + 40.0f * Details.scaleY / 2.75f),
+					x + SCREEN_SCALE_X(Details.dropShadowPosition) + CJK_DRAWW * Details.scaleX,
+					y + SCREEN_SCALE_Y(Details.dropShadowPosition) + CJK_DRAWH * Details.scaleY),
 				Details.dropColor,
-				xoff * w / 1024.0f, yoff / 25.6f,
-				xoff * w / 1024.0f + (1.0f / 48.0f) - 0.001f, yoff / 25.6f,
-				xoff * w / 1024.0f, (yoff + 1.0f) / 25.6f,
-				xoff * w / 1024.0f + (1.0f / 48.0f) - 0.001f, (yoff + 1.0f) / 25.6f - 0.0001f);
+				xoff * w / CJK_TEXW, yoff / CJK_ROWS_UV,
+				xoff * w / CJK_TEXW + (1.0f / CJK_COLS) - 0.001f, yoff / CJK_ROWS_UV,
+				xoff * w / CJK_TEXW, (yoff + 1.0f) / CJK_ROWS_UV,
+				xoff * w / CJK_TEXW + (1.0f / CJK_COLS) - 0.001f, (yoff + 1.0f) / CJK_ROWS_UV - 0.0001f);
 		}
-		CSprite2d::AddSpriteToBank(Details.bank + Details.style,	// BUG: game doesn't add bank
+		CSprite2d::AddToBuffer(
 			CRect(x, y,
-				x + 32.0f * Details.scaleX * 1.0f,
-				y + 40.0f * Details.scaleY / 2.75f),
-			Details.color,
-			xoff * w / 1024.0f, yoff / 25.6f,
-			xoff * w / 1024.0f + (1.0f / 48.0f) - 0.001f, yoff / 25.6f,
-			xoff * w / 1024.0f, (yoff + 1.0f) / 25.6f - 0.002f,
-			xoff * w / 1024.0f + (1.0f / 48.0f) - 0.001f, (yoff + 1.0f) / 25.6f - 0.0001f);*/
+				x + CJK_DRAWW * Details.scaleX,
+				y + CJK_DRAWH * Details.scaleY),
+			RenderState.color,
+			xoff * w / CJK_TEXW, yoff / CJK_ROWS_UV,
+			xoff * w / CJK_TEXW + (1.0f / CJK_COLS) - 0.001f, yoff / CJK_ROWS_UV,
+			xoff * w / CJK_TEXW, (yoff + 1.0f) / CJK_ROWS_UV - 0.002f,
+			xoff * w / CJK_TEXW + (1.0f / CJK_COLS) - 0.001f, (yoff + 1.0f) / CJK_ROWS_UV - 0.0001f);
 #endif
 	} else {
 		if (bDontPrint) return;
@@ -694,10 +699,20 @@ CFont::RenderFontBuffer()
 		}
 		wchar c = *pRenderStateBufPointer.pStr;
 		c -= ' ';
-		if (RenderState.bFontHalfTexture) 
-			c = FindNewCharacter(c); 
-		else if (c > 155) 
-			c = '\0'; 
+#ifdef MORE_LANGUAGES
+		if (RenderState.bFontHalfTexture)
+			c = FindNewCharacter(c);
+		else if (IsJapaneseFont())
+			; // CJK: glyphs are atlas cell indices (>=95); must NOT be
+			  // truncated to '\0' like the stock Latin path does below.
+		else if (c > 155)
+			c = '\0';
+#else
+		if (RenderState.bFontHalfTexture)
+			c = FindNewCharacter(c);
+		else if (c > 155)
+			c = '\0';
+#endif
 
 		if (RenderState.slant != 0.0f)
 			textPosY = (RenderState.slantRefX - textPosX) * RenderState.slant + RenderState.slantRefY;
@@ -833,7 +848,16 @@ CFont::PrintString(float x, float y, uint32, wchar *start, wchar *end, float spw
 void
 CFont::PrintStringFromBottom(float x, float y, wchar *str)
 {
-	y -= (32.0f * Details.scaleY / 2.0f + 2.0f * Details.scaleY) * GetNumberLines(x, y, str);
+#ifdef MORE_LANGUAGES
+	if (IsJapaneseFont())
+#ifdef REVC_CHINESE
+		y -= CJK_LINEH * GetNumberLines(x, y, str);
+#else
+		y -= (32.0f * Details.scaleY / 2.75f + 2.0f * Details.scaleY) * GetNumberLines(x, y, str);
+#endif
+	else
+#endif
+		y -= (32.0f * Details.scaleY / 2.0f + 2.0f * Details.scaleY) * GetNumberLines(x, y, str);
 	if (Details.slant != 0.0f)
 		y -= ((Details.slantRefX - x) * Details.slant + Details.slantRefY);
 	PrintString(x, y, str);
@@ -950,7 +974,11 @@ CFont::PrintString(float xstart, float ystart, wchar *s)
 					else
 						x = 0.0f;
 
+#ifdef REVC_CHINESE
+					y += CJK_LINEH;
+#else
 					y += 32.0f * Details.scaleY / 2.75f + 2.0f * Details.scaleY;
+#endif
 					numSpaces = 0;
 					first = true;
 					lineLength = 0.0f;
@@ -967,13 +995,20 @@ CFont::PrintString(float xstart, float ystart, wchar *s)
 		              Details.rightJustify ? xstart - x :
 		              xstart;
 #if 0 //def MORE_LANGUAGES
+		// Dead in the stock code: calls the 6-arg PrintString overload that
+		// only exists in the #if 0 block above. CJK line height kept in sync
+		// below for whenever this is revived.
 		if (PrintString(xleft, y, start, s, 0.0f, xstart) && IsJapaneseFont()) {
 			start = s;
 			if (!Details.centre && !Details.rightJustify)
 				x = xstart;
 			else
 				x = 0.0f;
+#ifdef REVC_CHINESE
+			y += CJK_LINEH;
+#else
 			y += 32.0f * Details.scaleY / 2.75f + 2.0f * Details.scaleY;
+#endif
 			numSpaces = 0;
 			first = true;
 			lineLength = 0.0f;
@@ -1050,7 +1085,11 @@ CFont::GetNumberLines(float xstart, float ystart, wchar *s)
 			// Why even?
 #ifdef MORE_LANGUAGES
 			if (IsJapanese())
+#ifdef REVC_CHINESE
+				y += CJK_LINEH;
+#else
 				y += 32.0f * Details.scaleY / 2.75f + 2.0f * Details.scaleY;
+#endif
 			else
 #endif
 				y += 32.0f * Details.scaleY * 0.5f + 2.0f * Details.scaleY;
@@ -1152,7 +1191,11 @@ CFont::GetTextRect(CRect *rect, float xstart, float ystart, wchar *s)
 			rect->right = xstart + maxlength/2 + 4.0f;
 #ifdef MORE_LANGUAGES
 			if (IsJapaneseFont()) {
+#ifdef REVC_CHINESE
+				rect->bottom = CJK_LINEH * numLines + ystart + (4.0f / 2.75f);
+#else
 				rect->bottom = (32.0f * Details.scaleY / 2.75f + 2.0f * Details.scaleY) * numLines + ystart + (4.0f / 2.75f);
+#endif
 				rect->top = ystart - (4.0f / 2.75f);
 			} else {
 #endif
@@ -1166,7 +1209,11 @@ CFont::GetTextRect(CRect *rect, float xstart, float ystart, wchar *s)
 			rect->right = xstart + Details.centreSize*0.5f + 4.0f;
 #ifdef MORE_LANGUAGES
 			if (IsJapaneseFont()) {
+#ifdef REVC_CHINESE
+				rect->bottom = CJK_LINEH * numLines + ystart + (4.0f / 2.75f);
+#else
 				rect->bottom = (32.0f * Details.scaleY / 2.75f + 2.0f * Details.scaleY) * numLines + ystart + (4.0f / 2.75f);
+#endif
 				rect->top = ystart - (4.0f / 2.75f);
 			} else {
 #endif
@@ -1183,7 +1230,11 @@ CFont::GetTextRect(CRect *rect, float xstart, float ystart, wchar *s)
 		rect->bottom = ystart - 4.0f + 4.0f;
 #ifdef MORE_LANGUAGES
 		if (IsJapaneseFont())
+#ifdef REVC_CHINESE
+			rect->top = CJK_LINEH * numLines + ystart + 2.0f + (4.0f / 2.75f);
+#else
 			rect->top = (32.0f * Details.scaleY / 2.75f + 2.0f * Details.scaleY) * numLines + ystart + 2.0f + (4.0f / 2.75f);
+#endif
 		else
 #endif
 			rect->top = (32.0f * Details.scaleY * 0.5f + 2.0f * Details.scaleY) * numLines + ystart + 2.0f + 2.0f;
@@ -1210,7 +1261,7 @@ CFont::GetCharacterWidth(wchar c)
 		switch (RenderState.style)
 		{
 		case FONT_JAPANESE:
-			return 29.4f;
+			return CJK_ADVANCE;
 		case FONT_BANK:
 			return 10.0f;
 		default:
@@ -1253,7 +1304,7 @@ CFont::GetCharacterSize(wchar c)
 		switch (Details.style)
 		{
 		case FONT_JAPANESE:
-			return 29.4f * Details.scaleX;
+			return CJK_ADVANCE * Details.scaleX;
 		case FONT_BANK:
 			return 10.0f * Details.scaleX;
 		default:

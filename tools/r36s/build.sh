@@ -10,9 +10,9 @@
 set -euo pipefail
 REPO="$(cd "$(dirname "$0")/../.." && pwd)"
 TYPE="${1:-Release}"
-EXTRA_CMAKE="-DREVC_R36S=ON -DREVC_LEAN_FX=ON -DREVC_PERF_HUD=ON"
+EXTRA_CMAKE="-DREVC_R36S=ON -DREVC_LEAN_FX=ON -DREVC_PERF_HUD=ON -DREVC_CHINESE=ON"
 if [[ "${2:-}" == "--baseline" ]]; then
-  EXTRA_CMAKE="-DREVC_R36S=OFF -DREVC_LEAN_FX=OFF -DREVC_PERF_HUD=ON"
+  EXTRA_CMAKE="-DREVC_R36S=OFF -DREVC_LEAN_FX=OFF -DREVC_PERF_HUD=ON -DREVC_CHINESE=OFF"
 fi
 IMAGE="${REVC_BUILDER_IMAGE:-revc-r36s-builder:focal}"
 mkdir -p "$REPO/build-r36s" "$HOME/.cache/revc-ccache"

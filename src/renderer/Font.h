@@ -68,8 +68,12 @@ enum {
 	FONT_HEADING,
 #ifdef MORE_LANGUAGES
 	FONT_JAPANESE,
-#endif
+	MAX_FONTS = FONT_JAPANESE + 1	// CJK: index FONT_JAPANESE must be valid
+	                                // (Initialise writes Sprite[3]; stock had
+	                                // MAX_FONTS == FONT_HEADING == 2 == OOB)
+#else
 	MAX_FONTS = FONT_HEADING
+#endif
 };
 
 enum {
@@ -91,6 +95,29 @@ enum
 #define FONT_LOCALE(style) (CFont::IsJapanese() ? FONT_JAPANESE : style)
 #else
 #define FONT_LOCALE(style) (style)
+#endif
+
+// CJK glyph atlas geometry (REVC_CHINESE). The stock Japanese font is a
+// 48-col grid in a 1024-wide texture; Chinese needs ~1930 glyphs so we widen
+// to 64 cols x 40 rows (2560-cell cap). Values MUST match the atlas produced
+// by tools/l10n/gen_cn_font.py.
+#ifdef REVC_CHINESE
+#define CJK_COLS      64
+#define CJK_ROWS_UV   40.0f   // texture_height / cell = 640 / 16
+#define CJK_TEXW      1024.0f // texture width in px
+#define CJK_CELLW     16.0f   // cell width in px (advance/UV unit)
+#define CJK_ADVANCE   24.0f   // on-screen advance between CJK glyphs
+#define CJK_DRAWW     24.0f   // on-screen drawn glyph width  (== advance: no overlap)
+#define CJK_DRAWH     24.0f   // on-screen drawn glyph height (square CJK cell)
+// Line height between wrapped CJK lines (must exceed CJK_DRAWH so rows don't
+// touch; used by PrintString/GetNumberLines/GetTextRect/PrintStringFromBottom).
+#define CJK_LINEH     (26.0f * Details.scaleY)
+#else
+#define CJK_COLS      48
+#define CJK_ROWS_UV   25.6f
+#define CJK_TEXW      1024.0f
+#define CJK_CELLW     21.0f
+#define CJK_ADVANCE   29.4f
 #endif
 
 #ifdef BUTTON_ICONS
