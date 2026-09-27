@@ -31,7 +31,7 @@ CTRL_RE = re.compile(r"~[A-Za-z0-9_]*~")
 # or an embedded "{ reVC updates }" line inside a multi-line value).
 TAG_RE = re.compile(r"\{\s*[^}]*\}\s*$")
 # Mission-table boundary marker lines: "{==== MISSION TABLE XXX ====}".
-TABLE_RE = re.compile(r"^\{[=\s]*MISSION TABLE [^}]*\}$")
+TABLE_RE = re.compile(r"^\{[=\s]*MISSION TABLE ([^}]+?)\s*[=]*\}$")
 
 PROMPT = """\
 You are translating the in-game text of Grand Theft Auto: Vice City into
@@ -72,10 +72,14 @@ Example output:
 def parse_source(path):
     txt = open(path, encoding="utf-8-sig", errors="replace").read()  # strip BOM
     entries = {}
+    boundaries = []  # (insertion index of the NEXT key, table name)
     cur, buf = None, []
     for line in txt.splitlines():
         if TABLE_RE.match(line):
-            # Mission-table boundary comment; not part of any value.
+            # Mission-table boundary comment; not part of any value. Record
+            # where the NEXT key lands so merge can re-emit the boundary.
+            boundaries.append((len(entries) + (1 if cur is not None else 0),
+                               TABLE_RE.match(line).group(1)))
             continue
         m = re.match(r"^\[([^\]]+)\]", line)
         if m:
@@ -86,7 +90,7 @@ def parse_source(path):
             buf.append(line)
     if cur is not None:
         entries[cur] = strip_tag("\n".join(buf).strip())
-    return entries
+    return entries, boundaries
 
 
 def strip_tag(value):
@@ -108,7 +112,7 @@ def codes(s):
 
 
 def cmd_split(args):
-    entries = parse_source(args.source)
+    entries, _ = parse_source(args.source)
     os.makedirs(args.outdir, exist_ok=True)
     with open(os.path.join(args.outdir, "PROMPT.txt"), "w", encoding="utf-8") as f:
         f.write(PROMPT)
@@ -127,7 +131,7 @@ def cmd_split(args):
 
 
 def cmd_merge(args):
-    src = parse_source(args.source)
+    src, boundaries = parse_source(args.source)
     out = {}
     missing_files = []
     warned = 0
@@ -166,10 +170,15 @@ def cmd_merge(args):
     ordered_keys = list(src.keys())
 
     if args.out:
-        # Emit the upstream Sergeanur/GXT txt format ([KEY]\nvalue\n\n), in the
-        # original source order; this is what gen_cn_font.py (VC) consumes.
+        # Emit the upstream Sergeanur/GXT txt format, in the original source
+        # order, with mission-table boundary lines re-inserted before the
+        # first key of each table (gen_cn_font.py needs them for the VC
+        # multi-table GXT layout).
+        bounds = dict(boundaries)  # insertion index -> table name
         with open(args.out, "w", encoding="utf-8") as f:
-            for k in ordered_keys:
+            for i, k in enumerate(ordered_keys):
+                if i in bounds:
+                    f.write("{========= MISSION TABLE %s ==========}\n\n" % bounds[i])
                 f.write("[%s]\n%s\n\n" % (k, out[k]))
 
     print("merged %d keys -> %s (%d fell back to English, %d code warnings)"
