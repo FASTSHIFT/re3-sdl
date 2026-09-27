@@ -121,15 +121,10 @@ Hud_Draw(void)
 	const float textScaleX = SCREEN_SCALE_X(0.5f);
 	const float textScaleY = SCREEN_SCALE_Y(0.8f);
 	const float blockH = sNumLines * lineH;
-	const float pad = SCREEN_SCALE_X(4.0f);
 
 	// Left-middle anchor.
 	float top = (SCREEN_HEIGHT - blockH) / 2.0f;
 	if(top < 0.0f) top = 0.0f;
-
-	// Semi-transparent black backdrop for readability.
-	CSprite2d::DrawRect(CRect(0.0f, top - pad, SCREEN_SCALE_X(110.0f), top + blockH),
-	                    CRGBA(0, 0, 0, 110));
 
 	wchar uline[48];
 	CFont::SetPropOn();
@@ -141,7 +136,8 @@ Hud_Draw(void)
 	CFont::SetBackGroundOnlyTextOff();
 	CFont::SetWrapx(SCREEN_WIDTH);
 	CFont::SetFontStyle(FONT_STANDARD);
-	CFont::SetDropShadowPosition(0);
+	CFont::SetDropShadowPosition(1);
+	CFont::SetDropColor(CRGBA(0, 0, 0, 255));
 	CFont::SetColor(CRGBA(255, 255, 255, 255));
 
 	for(int i = 0; i < sNumLines; i++) {
