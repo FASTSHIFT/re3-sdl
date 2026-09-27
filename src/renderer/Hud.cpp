@@ -801,9 +801,7 @@ void CHud::Draw()
 					CFont::SetBackGroundOnlyTextOff();
 					CFont::SetDropShadowPosition(2);
 					CFont::SetDropColor(CRGBA(0, 0, 0, fZoneAlpha));
-					CFont::SetFontStyle(FONT_BANK);
-					CFont::SetColor(CRGBA(ZONE_COLOR.r, ZONE_COLOR.g, ZONE_COLOR.b, fZoneAlpha));
-
+								CFont::SetFontStyle(FONT_LOCALE(FONT_BANK));
 					if (!CTheScripts::bPlayerIsInTheStatium)
 						CFont::PrintStringFromBottom(SCREEN_SCALE_FROM_RIGHT(32.0f), SCREEN_SCALE_FROM_BOTTOM(128.0f), m_ZoneToPrint);
 
@@ -1603,9 +1601,7 @@ void CHud::DrawAfterFade()
 			CFont::SetPropOn();
 			CFont::SetRightJustifyWrap(SCALE_AND_CENTER_X(0.0f));
 			CFont::SetRightJustifyOn();
-			CFont::SetFontStyle(FONT_BANK);
-			CFont::SetScale(FrontEndMenuManager.m_PrefsLanguage == CMenuManager::LANGUAGE_AMERICAN ? SCREEN_SCALE_X(1.7f) : SCREEN_SCALE_X(1.5f), SCREEN_SCALE_Y(1.8f));
-
+				CFont::SetFontStyle(FONT_LOCALE(FONT_BANK));
 			if (BigMessageX[1] >= SCREEN_SCALE_FROM_RIGHT(20.0f)) {
 				BigMessageInUse[1] += CTimer::GetTimeStep();
 

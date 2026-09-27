@@ -1279,6 +1279,23 @@ CFont::GetCharacterWidth(wchar c)
 	if (IsJapanese()) {
 		if (!RenderState.proportional)
 			return Size[0][Details.style][192];
+#ifdef REVC_CHINESE
+		// CJK mixed layout: ASCII (cells 0..94, wchar 0x20..0x7E) keeps the
+		// western widths from the stock table; CJK glyph codepoints (>=0x7F)
+		// are full-width CJK_ADVANCE. The stock Size_jp table describes the
+		// Japanese kana atlas layout and does not fit our Chinese mapping.
+		if (c < 95)
+			return Size[0][RenderState.style][c];
+		switch (RenderState.style)
+		{
+		case FONT_JAPANESE:
+			return CJK_ADVANCE;
+		case FONT_BANK:
+			return 10.0f;
+		default:
+			return Size[0][RenderState.style][c];
+		}
+#else
 		if (c <= 94 || Details.style == FONT_HEADING || RenderState.style == FONT_BANK) {
 			switch (RenderState.style)
 			{
@@ -1298,6 +1315,7 @@ CFont::GetCharacterWidth(wchar c)
 		default:
 			return Size[0][RenderState.style][c];
 		}
+#endif
 	}
 
 	else if (RenderState.proportional)
@@ -1322,6 +1340,28 @@ CFont::GetCharacterSize(wchar c)
 	{
 		if (!Details.proportional)
 			return Size[0][Details.style][209] * Details.scaleX;
+#ifdef REVC_CHINESE
+		// See GetCharacterWidth: ASCII keeps western widths, CJK is
+		// full-width; the stock Size_jp kana table does not apply.
+		if (c < 95) {
+			switch (Details.style)
+			{
+			case FONT_JAPANESE:
+				return Size[0][FONT_STANDARD][c] * Details.scaleX;
+			default:
+				return Size[0][Details.style][c] * Details.scaleX;
+			}
+		}
+		switch (Details.style)
+		{
+		case FONT_JAPANESE:
+			return CJK_ADVANCE * Details.scaleX;
+		case FONT_BANK:
+			return 10.0f * Details.scaleX;
+		default:
+			return Size[0][Details.style][c] * Details.scaleX;
+		}
+#else
 		if (c <= 94 || Details.style == FONT_HEADING || Details.style == FONT_BANK) {
 			switch (Details.style)
 			{
@@ -1341,6 +1381,7 @@ CFont::GetCharacterSize(wchar c)
 		default:
 			return Size[0][Details.style][c] * Details.scaleX;
 		}
+#endif
 	}
 	else
 	{
