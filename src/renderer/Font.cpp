@@ -245,49 +245,7 @@ int16 CFont::Size[MAX_FONTS][210] = {
 			 9,  9,  9, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 10,  9,
 			//space, unprop
 			10, 20
-		},
-	{
-		//FONT_JAPANESE (REVC_CHINESE): indices 2..3 alias the STANDARD table.
-		// SetFontStyle maps FONT_HEADING onto STANDARD+half-texture, so style
-		// 2/3 are only reached through FONT_LOCALE under MORE_LANGUAGES; CJK
-		// glyph widths never consult this table (CJK_ADVANCE branch), but the
-		// ASCII part of mixed strings does, so it must hold real widths.
-		//SPC,!,         $,  %,  &,  ',  [,  ],      +,  ,   -,  .,
-		12, 9,  22, 17, 19, 19, 25, 4,  33, 33, 25, 35, 11, 10,  6, 33,
-		18, 10, 17, 17, 17, 17, 17, 15, 12, 16,  5, 30, 30, 30, 30, 30,
-		12, 16, 19, 16, 19, 18, 18, 17, 22, 11, 17, 18, 18, 30, 22, 19,
-		22, 19, 19, 20, 18, 19, 19, 29, 19, 18, 19, 19, 33, 33, 10, 19,
-		12, 14, 11, 11, 16, 11, 12, 14, 14, 10, 13, 12, 10, 19, 18, 12,
-		16, 13, 13, 11, 12, 15, 12, 15, 13, 12, 12, 37, 33, 37, 35, 37,
-		16, 16, 16, 16, 33, 17, 18, 18, 18, 18, 11, 11, 11, 11, 19, 19,
-		19, 19, 19, 19, 19, 19, 15, 14, 14, 14, 14, 20, 14, 11, 11, 11,
-		11, 10, 10, 10, 10, 12, 12, 12, 12, 15, 15, 15, 15, 22, 18, 21,
-		10, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19,
-		19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19,
-		19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19,
-		19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19,
-		//space, unprop
-		19, 16
-	},
-	{
-		// same table again for style 3 (FONT_JAPANESE +1 slot)
-		//SPC,!,         $,  %,  &,  ',  [,  ],      +,  ,   -,  .,
-		12, 9,  22, 17, 19, 19, 25, 4,  33, 33, 25, 35, 11, 10,  6, 33,
-		18, 10, 17, 17, 17, 17, 17, 15, 12, 16,  5, 30, 30, 30, 30, 30,
-		12, 16, 19, 16, 19, 18, 18, 17, 22, 11, 17, 18, 18, 30, 22, 19,
-		22, 19, 19, 20, 18, 19, 19, 29, 19, 18, 19, 19, 33, 33, 10, 19,
-		12, 14, 11, 11, 16, 11, 12, 14, 14, 10, 13, 12, 10, 19, 18, 12,
-		16, 13, 13, 11, 12, 15, 12, 15, 13, 12, 12, 37, 33, 37, 35, 37,
-		16, 16, 16, 16, 33, 17, 18, 18, 18, 18, 11, 11, 11, 11, 19, 19,
-		19, 19, 19, 19, 19, 19, 15, 14, 14, 14, 14, 20, 14, 11, 11, 11,
-		11, 10, 10, 10, 10, 12, 12, 12, 12, 15, 15, 15, 15, 22, 18, 21,
-		10, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19,
-		19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19,
-		19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19,
-		19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19,
-		//space, unprop
-		19, 16
-	}
+		}
 	}
 #endif
 };
@@ -1321,23 +1279,6 @@ CFont::GetCharacterWidth(wchar c)
 	if (IsJapanese()) {
 		if (!RenderState.proportional)
 			return Size[0][Details.style][192];
-#ifdef REVC_CHINESE
-		// CJK mixed layout: ASCII (cells 0..94, wchar 0x20..0x7E) keeps the
-		// western widths from the stock table; CJK glyph codepoints (>=0x7F)
-		// are full-width CJK_ADVANCE. The stock Size_jp table describes the
-		// Japanese kana atlas layout and does not fit our Chinese mapping.
-		if (c < 95)
-			return Size[0][RenderState.style][c];
-		switch (RenderState.style)
-		{
-		case FONT_JAPANESE:
-			return CJK_ADVANCE;
-		case FONT_BANK:
-			return 10.0f;
-		default:
-			return Size[0][RenderState.style][c];
-		}
-#else
 		if (c <= 94 || Details.style == FONT_HEADING || RenderState.style == FONT_BANK) {
 			switch (RenderState.style)
 			{
@@ -1357,7 +1298,6 @@ CFont::GetCharacterWidth(wchar c)
 		default:
 			return Size[0][RenderState.style][c];
 		}
-#endif
 	}
 
 	else if (RenderState.proportional)
@@ -1382,28 +1322,6 @@ CFont::GetCharacterSize(wchar c)
 	{
 		if (!Details.proportional)
 			return Size[0][Details.style][209] * Details.scaleX;
-#ifdef REVC_CHINESE
-		// See GetCharacterWidth: ASCII keeps western widths, CJK is
-		// full-width; the stock Size_jp kana table does not apply.
-		if (c < 95) {
-			switch (Details.style)
-			{
-			case FONT_JAPANESE:
-				return Size[0][FONT_STANDARD][c] * Details.scaleX;
-			default:
-				return Size[0][Details.style][c] * Details.scaleX;
-			}
-		}
-		switch (Details.style)
-		{
-		case FONT_JAPANESE:
-			return CJK_ADVANCE * Details.scaleX;
-		case FONT_BANK:
-			return 10.0f * Details.scaleX;
-		default:
-			return Size[0][Details.style][c] * Details.scaleX;
-		}
-#else
 		if (c <= 94 || Details.style == FONT_HEADING || Details.style == FONT_BANK) {
 			switch (Details.style)
 			{
@@ -1423,7 +1341,6 @@ CFont::GetCharacterSize(wchar c)
 		default:
 			return Size[0][Details.style][c] * Details.scaleX;
 		}
-#endif
 	}
 	else
 	{
