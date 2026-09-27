@@ -56,6 +56,7 @@ CFontRenderState CFont::RenderState;
 #ifdef MORE_LANGUAGES
 uint8 CFont::LanguageSet = FONT_LANGSET_EFIGS;
 int32 CFont::Slot = -1;
+int32 CFont::JapSlot = -1;
 #define JAP_TERMINATION (0x8000 | '~')
 
 int16 CFont::Size[LANGSET_MAX][MAX_FONTS][210] = {
@@ -322,7 +323,13 @@ CFont::Initialise(void)
 		CTxdStore::LoadTxd(slot, "MODELS/FONTS_R.TXD");
 		break;
 	case FONT_LANGSET_JAPANESE:
-		CTxdStore::LoadTxd(slot, "MODELS/FONTS_J.TXD");
+		// CJK (REVC_CHINESE): keep the western fonts in the main slot and
+		// pull the FONTJAP atlas from its own second slot - loading two
+		// TXDs into one slot would replace, not merge.
+		CTxdStore::LoadTxd(slot, "MODELS/FONTS.TXD");
+		JapSlot = CTxdStore::AddTxdSlot("fonts_j");
+		CTxdStore::LoadTxd(JapSlot, "MODELS/FONTS_J.TXD");
+		CTxdStore::AddRef(JapSlot);
 		break;
 	}
 #else
@@ -334,8 +341,14 @@ CFont::Initialise(void)
 	Sprite[0].SetTexture("font2", "font2m");
 #ifdef MORE_LANGUAGES
 	if (IsJapanese()) {
-		Sprite[1].SetTexture("FONTJAP", "FONTJAP_mask");
+		// CJK atlas lives in its own TXD slot. Font indices:
+		// 0=FONT_BANK(font2), 1=FONT_STANDARD(font1), 2/3=FONT_JAPANESE.
+		// Stock code overwrote Sprite[1] with FONTJAP here, killing
+		// FONT_STANDARD for the whole session.
+		CTxdStore::SetCurrentTxd(JapSlot);
+		Sprite[2].SetTexture("FONTJAP", "FONTJAP_mask");
 		Sprite[3].SetTexture("FONTJAP", "FONTJAP_mask");
+		CTxdStore::SetCurrentTxd(slot);
 	}
 #endif // MORE_LANGUAGES
 	Sprite[1].SetTexture("font1", "font1m");
@@ -435,15 +448,25 @@ CFont::ReloadFonts(uint8 set)
 			CTxdStore::LoadTxd(Slot, "MODELS/FONTS_R.TXD");
 			break;
 		case FONT_LANGSET_JAPANESE:
-			CTxdStore::LoadTxd(Slot, "MODELS/FONTS_J.TXD");
+			// CJK (REVC_CHINESE): western fonts stay in the main slot; the
+			// FONTJAP atlas has its own slot and only needs loading once.
+			CTxdStore::LoadTxd(Slot, "MODELS/FONTS.TXD");
+			if (JapSlot == -1) {
+				JapSlot = CTxdStore::AddTxdSlot("fonts_j");
+				CTxdStore::LoadTxd(JapSlot, "MODELS/FONTS_J.TXD");
+				CTxdStore::AddRef(JapSlot);
+			}
 			break;
 		}
 		CTxdStore::SetCurrentTxd(Slot);
-		Sprite[0].SetTexture("font2", "font2_mask");
+		Sprite[0].SetTexture("font2", "font2m");
 		if (set == FONT_LANGSET_JAPANESE) {
+			CTxdStore::SetCurrentTxd(JapSlot);
 			Sprite[2].SetTexture("FONTJAP", "FONTJAP_mask");
+			Sprite[3].SetTexture("FONTJAP", "FONTJAP_mask");
+			CTxdStore::SetCurrentTxd(Slot);
 		}
-		Sprite[1].SetTexture("font1", "font1_mask");
+		Sprite[1].SetTexture("font1", "font1m");
 		CTxdStore::PopCurrentTxd();
 	}
 	LanguageSet = set;
@@ -453,6 +476,14 @@ CFont::ReloadFonts(uint8 set)
 void
 CFont::Shutdown(void)
 {
+#ifdef MORE_LANGUAGES
+	if (JapSlot != -1) {
+		Sprite[2].Delete();
+		Sprite[3].Delete();
+		CTxdStore::RemoveTxdSlot(JapSlot);
+		JapSlot = -1;
+	}
+#endif
 #ifdef BUTTON_ICONS
 	if (ButtonsSlot != -1) {
 		for (int i = 0; i < MAX_BUTTON_ICONS; i++)
