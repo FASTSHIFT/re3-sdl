@@ -191,23 +191,44 @@ def has_alpha(img):
     return mn < 255
 
 
-def compress_to_dxt(img):
-    """RGBA Image -> (compression, [mip_compressed_bytes...]) via ImageMagick.
-    Returns (1|5, [top, mip1, ...]) or (0, []) if the texture is too small."""
+def compress_to_dxt(img, mode="dxt"):
+    """RGBA Image -> (compression_code, [mip_compressed_bytes...]).
+    mode: 'dxt' (desktop S3TC via ImageMagick), 'astc' (Mali R36S via astcenc).
+    ASTC code = block size (6); DXT code = 1|5.
+    Returns (0, []) if the texture is too small."""
     if img.width < 4 or img.height < 4:
         return 0, []
-    dxt = 5 if has_alpha(img) else 1
     with tempfile.TemporaryDirectory() as td:
-        src = os.path.join(td, "in.png")
-        dds = os.path.join(td, "out.dds")
-        img.save(src)
-        r = subprocess.run(
-            ["convert", src, "-define", f"dds:compression=dxt{dxt}", "-define", "dds:mipmaps=16", dds],
-            capture_output=True)
-        if r.returncode != 0:
-            raise RuntimeError(f"convert failed: {r.stderr.decode()}")
-        mips = parse_dds_mips(open(dds, "rb").read())
-    return dxt, mips
+        if mode == "astc":
+            # astcenc does not chain mips - encode each level separately.
+            data = []
+            cur = img
+            while True:
+                src = os.path.join(td, f"m{len(data)}.png")
+                cur.save(src)
+                out = os.path.join(td, f"m{len(data)}.astc")
+                r = subprocess.run(
+                    ["astcenc", "-cl", src, out, "4x4", "-medium", "-silent"],
+                    capture_output=True)
+                if r.returncode != 0:
+                    raise RuntimeError(f"astcenc failed: {r.stderr.decode()[:200]}")
+                d = open(out, "rb").read()
+                data.append(d[16:])  # strip 16B ASTC magic+header
+                if cur.width <= 4 or cur.height <= 4:
+                    break
+                cur = cur.resize((max(1, cur.width // 2), max(1, cur.height // 2)), Image.LANCZOS)
+            return 4, data
+        else:
+            dxt = 5 if has_alpha(img) else 1
+            src = os.path.join(td, "in.png")
+            dds = os.path.join(td, "out.dds")
+            img.save(src)
+            r = subprocess.run(
+                ["convert", src, "-define", f"dds:compression=dxt{dxt}", "-define", "dds:mipmaps=16", dds],
+                capture_output=True)
+            if r.returncode != 0:
+                raise RuntimeError(f"convert failed: {r.stderr.decode()}")
+            return dxt, parse_dds_mips(open(dds, "rb").read())
 
 
 def parse_dds_mips(d):
@@ -255,7 +276,9 @@ def build_glnative(tex, compression, mips):
     body += struct.pack("<I", tex.format)
     body += struct.pack("<iiii", tex.width, tex.height, tex.depth, len(mips))
     body += struct.pack("<i", ARGS.gles)          # subplatform = gl3Caps.gles
-    flags = 2 | (1 if compression == 5 else 0)
+    # flags: bit0=hasAlpha, bit1=isCompressed. ASTC blocks always carry
+    # alpha (GL_COMPRESSED_RGBA_ASTC_*), so keep bit0 for both encodings.
+    flags = 2 | (1 if (compression == 5 or compression >= 4) else 0)
     body += struct.pack("<i", flags)
     body += struct.pack("<i", compression)
     for m in mips:
@@ -265,7 +288,12 @@ def build_glnative(tex, compression, mips):
 
 def write_txd(textures_out, path):
     out = bytearray()
-    body = struct.pack("<hh", len(textures_out), 1)
+    # deviceId MUST be 0: RwTexDictionaryGtaStreamRead (small-file path)
+    # reads the whole 4-byte STRUCT as one i32 loop count (numTex |
+    # deviceId<<16); deviceId=1 made it try 65537 textures -> "Failed to
+    # load TXD". The big-file path (GtaStreamRead1) divides by 2 and
+    # survives either way.
+    body = struct.pack("<hh", len(textures_out), 0)
     out += chunk(ID_TEXDICTIONARY, chunk(ID_STRUCT, body))
     for (tex, compression, mips) in textures_out:
         if compression:
@@ -284,6 +312,8 @@ def main():
     ap.add_argument("output")
     ap.add_argument("--gles", type=int, default=1, choices=[0, 1],
                     help="target subplatform (1=R36S GLES, 0=desktop GL)")
+    ap.add_argument("--astc", action="store_true",
+                    help="encode ASTC 6x6 (Mali/Bifrost) instead of DXT (desktop S3TC)")
     ap.add_argument("--min-size", type=int, default=4)
     ap.add_argument("--whitelist", default="", help="comma-separated texture names to skip")
     ap.add_argument("--dry", action="store_true")
@@ -315,7 +345,7 @@ def main():
             out_list.append((tex, 0, []))
             kept += 1
             continue
-        compression, mips = compress_to_dxt(img)
+        compression, mips = compress_to_dxt(img, "astc" if ARGS.astc else "dxt")
         if compression == 0:
             out_list.append((tex, 0, []))
             kept += 1
@@ -325,7 +355,7 @@ def main():
         saved += max(0, old - new)
         out_list.append((tex, compression, mips))
         print(f"  {tex.name:24s} {tex.width}x{tex.height} fmt=0x{tex.format:04x} "
-              f"DXT{compression} mips={len(mips)} {old}->{new}B")
+              f"{'ASTC' if ARGS.astc else 'DXT'}{compression} mips={len(mips)} {old}->{new}B")
     print(f"== {ARGS.input}: {len(textures)} textures, kept={kept} skipped={skipped}, "
           f"saved≈{saved/1024:.0f}KB (file payload)")
     if not ARGS.dry:
