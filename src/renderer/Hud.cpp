@@ -974,7 +974,7 @@ void CHud::Draw()
 					CFont::SetScale(SCREEN_SCALE_X(HUD_TEXT_SCALE_X), SCREEN_SCALE_Y(HUD_TEXT_SCALE_Y));
 					CFont::SetRightJustifyOn();
 					CFont::SetRightJustifyWrap(0.0f);
-					CFont::SetFontStyle(FONT_LOCALE(FONT_HEADING));
+					CFont::SetFontStyle(FONT_HEADING);	// digits: stock font, CJK atlas halves them
 					CFont::SetPropOff();
 					CFont::SetBackGroundOnlyTextOn();
 					CFont::SetDropShadowPosition(2);
@@ -985,6 +985,8 @@ void CHud::Draw()
 					CFont::SetPropOn();
 
 					if (CUserDisplay::OnscnTimer.m_sClocks[0].m_aClockText[0]) {
+						// timer label stays western: digits are pure ASCII and the
+						// CJK atlas renders them at half width (原版字体需求)
 						CFont::SetDropShadowPosition(2);
 						CFont::SetDropColor(CRGBA(0, 0, 0, 255));
 						CFont::SetColor(TIMER_COLOR);
@@ -1014,7 +1016,7 @@ void CHud::Draw()
 							CFont::SetCentreOff();
 							CFont::SetRightJustifyOn();
 							CFont::SetRightJustifyWrap(0.0f);
-							CFont::SetFontStyle(FONT_LOCALE(FONT_HEADING));
+							CFont::SetFontStyle(FONT_HEADING);	// digits: keep stock font (CJK atlas halves them)
 							CFont::SetWrapx(SCREEN_STRETCH_X(DEFAULT_SCREEN_WIDTH));
 							CFont::SetPropOn();
 							CFont::SetBackGroundOnlyTextOn();
@@ -1042,6 +1044,8 @@ void CHud::Draw()
 
 						if (CUserDisplay::OnscnTimer.m_sCounters[i].m_aCounterText[0]) {
 							CFont::SetPropOn();
+							// counter label: may be a translated mission word
+							// (e.g. 时间) - keep it in the CJK atlas
 							CFont::SetFontStyle(FONT_LOCALE(FONT_HEADING));
 							CFont::SetScale(SCREEN_SCALE_X(HUD_TEXT_SCALE_X), SCREEN_SCALE_Y(HUD_TEXT_SCALE_Y));
 							CFont::SetDropShadowPosition(2);

@@ -706,6 +706,76 @@ CFont::RenderFontBuffer()
 			textPosY = RenderState.fTextPosY;
 			color = RenderState.color;
 		}
+#ifdef MORE_LANGUAGES
+		if (*pRenderStateBufPointer.pStr == '~' ||
+		    (IsJapaneseFont() && *pRenderStateBufPointer.pStr == JAP_TERMINATION)) {
+			// CJK GXT stores tokens with the 0x8000 flag on every char
+			// (JAP_TERMINATION scheme). ParseToken only knows plain ASCII,
+			// so consume a flagged token here by scanning to the closing
+			// terminator; apply the same effects ParseToken would for the
+			// first char after the opener (color/icon).
+			if (*pRenderStateBufPointer.pStr == JAP_TERMINATION) {
+				wchar *tok = pRenderStateBufPointer.pStr + 1;
+				switch ((wchar)(*tok & 0x7FFF)) {
+				case 'B': bBold = !bBold; break;
+				case 'f': bFlash = !bFlash; break;
+#ifdef BUTTON_ICONS
+				case 'U': PS2Symbol = BUTTON_UP; break;
+				case 'D': PS2Symbol = BUTTON_DOWN; break;
+				case '<': PS2Symbol = BUTTON_LEFT; break;
+				case '>': PS2Symbol = BUTTON_RIGHT; break;
+				case 'X': PS2Symbol = BUTTON_CROSS; break;
+				case 'O': PS2Symbol = BUTTON_CIRCLE; break;
+				case 'Q': PS2Symbol = BUTTON_SQUARE; break;
+				case 'T': PS2Symbol = BUTTON_TRIANGLE; break;
+				case 'K': PS2Symbol = BUTTON_L1; break;
+				case 'M': PS2Symbol = BUTTON_L2; break;
+				case 'A': PS2Symbol = BUTTON_L3; break;
+				case 'J': PS2Symbol = BUTTON_R1; break;
+				case 'V': PS2Symbol = BUTTON_R2; break;
+				case 'C': PS2Symbol = BUTTON_R3; break;
+				case 'H': PS2Symbol = BUTTON_RSTICK_UP; break;
+				case 'L': PS2Symbol = BUTTON_RSTICK_DOWN; break;
+				case '(': PS2Symbol = BUTTON_RSTICK_LEFT; break;
+				case ')': PS2Symbol = BUTTON_RSTICK_RIGHT; break;
+#endif
+				default: break;	// color tokens: keep current color
+				}
+				bool closed = false;
+				while (*pRenderStateBufPointer.pStr &&
+				       *pRenderStateBufPointer.pStr != JAP_TERMINATION &&
+				       *pRenderStateBufPointer.pStr != '~')
+					pRenderStateBufPointer.pStr++;
+				if (*pRenderStateBufPointer.pStr) {
+					pRenderStateBufPointer.pStr++;	// past the closer
+					closed = true;
+				}
+				// the for-loop's pStr++ would eat the next real glyph;
+				// step back so the increment lands past the closer
+				// (only when a closer was found; unterminated tokens run to
+				// the end of the buffer and must not step back)
+				if (closed)
+					pRenderStateBufPointer.pStr--;
+			} else
+				pRenderStateBufPointer.pStr = ParseToken(pRenderStateBufPointer.pStr, color, bFlash, bBold);
+#ifdef BUTTON_ICONS
+			if(PS2Symbol != BUTTON_NONE) {
+				DrawButton(textPosX, textPosY);
+				textPosX += RenderState.scaleY * 17.0f;
+				PS2Symbol = BUTTON_NONE;
+			}
+#endif
+			if (bFlash) {
+				if (CTimer::GetTimeInMilliseconds() - Details.nFlashTimer > 300) {
+					Details.bFlashState = !Details.bFlashState;
+					Details.nFlashTimer = CTimer::GetTimeInMilliseconds();
+				}
+				Details.color.alpha = Details.bFlashState ? 0 : 255;
+			}
+			if (!RenderState.bIsShadow)
+				RenderState.color = color;
+		}
+#else
 		if (*pRenderStateBufPointer.pStr == '~') {
 #ifdef BUTTON_ICONS
 			PS2Symbol = BUTTON_NONE;
@@ -728,6 +798,7 @@ CFont::RenderFontBuffer()
 			if (!RenderState.bIsShadow)
 				RenderState.color = color;
 		}
+#endif
 		wchar c = *pRenderStateBufPointer.pStr;
 		c -= ' ';
 #ifdef MORE_LANGUAGES
@@ -945,6 +1016,32 @@ CFont::PrintString(float xstart, float ystart, wchar *s)
 					if (IsJapanese() && IsJapanesePunctuation(s))
 						s--;
 #endif
+					// CJK (REVC_CHINESE): when the whole CJK run is wider
+					// than the line, flushing and re-testing the same
+					// pointer loops forever (device hang). Split the line
+					// AT this glyph: print what fits is handled by the
+					// forced single-glyph advance below.
+					bool forceSplit = IsJapaneseFont() && x == 0.0f &&
+					                  GetStringWidth(s) > xend;
+					if (forceSplit) {
+						// emit the glyphs of this line one at a time
+						wchar *split = s;
+						float cur = 0.0f;
+						while (*split && cur + GetCharacterSize(*split - ' ') <= xend) {
+							cur += GetCharacterSize(*split - ' ');
+							split++;
+						}
+						if (split == s) split++;	// always progress
+						PrintString(xstart - (Details.centre ? cur/2 : 0.0f), y, Details.anonymous_25, s, split, 0.0f);
+						y += CJK_LINEH;
+						s = start = split;
+						first = true;
+						lineLength = 0.0f;
+						numSpaces = 0;
+						if (*s == '\0')
+							return;
+						continue;
+					}
 					// flush line
 					float spaceWidth = !Details.justify || Details.centre ? 0.0f :
 						(Details.wrapX - lineLength) / numSpaces;
@@ -1099,6 +1196,31 @@ CFont::GetNumberLines(float xstart, float ystart, wchar *s)
 			f -= SCREEN_SCALE_X(21.0f * 2.0f);
 #endif
 
+		// CJK (REVC_CHINESE): GetStringWidth now returns the width of the
+		// whole CJK run. If a single run is wider than the line, the loop
+		// below would reset x and re-test the same pointer forever (device
+		// hang in mission subtitles). Force progress: measure from the
+		// current position and advance one glyph at a time until it fits.
+		if (IsJapaneseFont()) {
+			while (*s && x + GetStringWidth(s) > f) {
+				s++;
+				n++;
+#ifdef REVC_CHINESE
+				y += CJK_LINEH;
+#else
+				y += 32.0f * Details.scaleY / 2.75f + 2.0f * Details.scaleY;
+#endif
+				if(Details.centre || Details.rightJustify)
+					x = 0.0f;
+				else
+					x = xstart;
+			}
+			if (!*s) {
+				n++;
+				break;
+			}
+		}
+
 		if(x + GetStringWidth(s) > f){
 #ifdef MORE_LANGUAGES
 			if (IsJapanese())
@@ -1195,6 +1317,17 @@ CFont::GetTextRect(CRect *rect, float xstart, float ystart, wchar *s)
 					x = xstart;
 				numLines++;
 				y += 32.0f * Details.scaleY * 0.5f + 2.0f * Details.scaleY;
+				// CJK (REVC_CHINESE): a whole CJK run is one "word" and may
+				// be wider than the line - force progress one glyph at a
+				// time or this loop never advances (same hang as
+				// GetNumberLines).
+				if (IsJapaneseFont()) {
+					int guard = 0;
+					while (*s && x + GetStringWidth(s) > xEnd && guard++ < 4096) {
+						x += GetCharacterSize(*s - ' ');
+						s++;
+					}
+				}
 			}else{
 				// still space in current line
 				t = GetNextSpace(s);
