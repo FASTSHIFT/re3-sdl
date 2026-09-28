@@ -492,13 +492,24 @@ void *CdStreamThread(void *param)
 			ASSERT(pChannel->hFile >= 0);
 			ASSERT(pChannel->pBuffer != nil );
 
-			lseek(pChannel->hFile, (size_t)pChannel->nSectorOffset * (size_t)CDSTREAM_SECTOR_SIZE, SEEK_SET);
-			if (read(pChannel->hFile, pChannel->pBuffer, pChannel->nSectorsToRead * CDSTREAM_SECTOR_SIZE) == -1) {
+			off_t readOff = (size_t)pChannel->nSectorOffset * (size_t)CDSTREAM_SECTOR_SIZE;
+			size_t readLen = (size_t)pChannel->nSectorsToRead * CDSTREAM_SECTOR_SIZE;
+			lseek(pChannel->hFile, readOff, SEEK_SET);
+			if (read(pChannel->hFile, pChannel->pBuffer, readLen) == -1) {
 				// pChannel->nSectorsToRead == 0 at this point means we wanted to flush channel
 				// STREAM_WAITING is a little hack to make CStreaming not process this data
 				pChannel->nStatus = pChannel->nSectorsToRead == 0 ? STREAM_WAITING : STREAM_ERROR;
 			} else {
 				pChannel->nStatus = STREAM_NONE;
+#ifdef REVC_R36S
+				// 1GB board: gta3.img (380MB) streams through the page cache
+				// and never gets dropped - dmesg after OOM showed
+				// file-rss:447MB attributed to the process, making it the
+				// top OOM-kill candidate (score 684) even though the cache
+				// is reclaimable. The data now lives in pBuffer; tell the
+				// kernel it can drop those pages right away.
+				posix_fadvise(pChannel->hFile, readOff, readLen, POSIX_FADV_DONTNEED);
+#endif
 			}
 		}
 
