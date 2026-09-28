@@ -84,7 +84,12 @@ def main():
             name, outpath, status = res
             stats[status] = stats.get(status, 0) + 1
             if outpath:
-                repl[name] = outpath
+                # key by lowercase: the archive has mixed-case entry names
+                # (IGmike.txd, LODhaiti.txd, ...) and the rebuild below
+                # looks entries up via name.lower() - a raw-case key made
+                # the converted output silently fall back to the original
+                # D3D8 bytes for 178 entries (peds, cutscene actors, LODs).
+                repl[name.lower()] = outpath
             if (i + 1) % 100 == 0:
                 print(f"  {i+1}/{len(jobs)} done ({stats.get('convert-failed',0)} failed)")
 
