@@ -725,6 +725,14 @@ bool CFont::IsAnsiCharacter(wchar *s)
 }
 #endif
 
+bool CFont::ContainsCJK(wchar *s)
+{
+		for(; *s; s++)
+			if(*s >= 0x100)
+				return true;
+		return false;
+}
+
 void
 CFont::RenderFontBuffer()
 {

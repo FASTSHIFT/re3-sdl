@@ -245,6 +245,11 @@ public:
 
 	// japanese stuff
 	static bool IsAnsiCharacter(wchar* s);
+	// true if the string has at least one CJK glyph (GXT cells are
+	//* >= 0x100 after the 0x20 offset) - HUD widgets pick the locale
+	// font only for actually-localized text and keep the stock Latin
+	// bank (kerned, full-width) for latin names.
+	static bool ContainsCJK(wchar* s);
 	static bool IsJapanesePunctuation(wchar* str);
 	static bool IsJapanese() { return LanguageSet == FONT_LANGSET_JAPANESE; }
 	static bool IsJapaneseFont() { return IsJapanese() && (Details.style == FONT_JAPANESE);  }
