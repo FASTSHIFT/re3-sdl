@@ -728,7 +728,10 @@ bool CFont::IsAnsiCharacter(wchar *s)
 bool CFont::ContainsCJK(wchar *s)
 {
 		for(; *s; s++)
-			if(*s >= 0x100)
+			/* CJK atlas cells are >= 95, stored as wchar (cell + 0x20)
+			 * (see tools/l10n/gen_cn_font.py) - i.e. >= 0x7F. ASCII
+			 * text (wchars 0x20..0x7E) must NOT match. */
+			if(*s >= 0x7F)
 				return true;
 		return false;
 }
