@@ -725,6 +725,17 @@ bool CFont::IsAnsiCharacter(wchar *s)
 }
 #endif
 
+<<<<<<< HEAD
+=======
+bool CFont::ContainsCJK(wchar *s)
+{
+		for(; *s; s++)
+			if(*s >= 0x100)
+				return true;
+		return false;
+}
+
+>>>>>>> parent of 746149a2 (CJK: fix ContainsCJK threshold - CJK wchars start at 0x7F not 0x100)
 void
 CFont::RenderFontBuffer()
 {
