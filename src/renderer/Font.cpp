@@ -1376,44 +1376,48 @@ CFont::GetStringWidth(wchar *s, bool spaces)
 #ifdef MORE_LANGUAGES
 	if (IsJapanese())
 	{
-		do
-		{
-			if ((*s != ' ' || spaces) && *s != '\0') {
-				do {
-					while (*s == '~' || *s == JAP_TERMINATION) {
-						s++;
+		// CJK (REVC_CHINESE): width of the whole run up to the next
+		// space/terminator/token, mirroring GetNextSpace. The stock loop
+		// stopped after one glyph (IsAnsiCharacter fails for CJK), which
+		// made centre/right-justify x-offsets wrong (half the string
+		// width) - "菜单排版乱".
+		for (;;) {
+			if (*s == '\0' || (*s == ' ' && !spaces))
+				break;
+			if (*s == JAP_TERMINATION || *s == '~') {
+				s++;
 #ifdef BUTTON_ICONS
-						switch (*s) {
-						case 'U':
-						case 'D':
-						case '<':
-						case '>':
-						case 'X':
-						case 'O':
-						case 'Q':
-						case 'T':
-						case 'K':
-						case 'M':
-						case 'A':
-						case 'J':
-						case 'V':
-						case 'C':
-						case '(':
-						case ')':
-							w += 17.0f * Details.scaleY;
-							break;
-						default:
-							break;
-						}
+				switch (*s) {
+				case 'U':
+				case 'D':
+				case '<':
+				case '>':
+				case 'X':
+				case 'O':
+				case 'Q':
+				case 'T':
+				case 'K':
+				case 'M':
+				case 'A':
+				case 'J':
+				case 'V':
+				case 'C':
+				case '(':
+				case ')':
+					w += 17.0f * Details.scaleY;
+					break;
+				default:
+					break;
+				}
 #endif
-						while (!(*s == '~' || *s == JAP_TERMINATION)) s++;
-						s++;
-					}
-					w += GetCharacterSize(*s - ' ');
-					++s;
-				} while (*s == '~' || *s == JAP_TERMINATION);
+				while (!(*s == '~' || *s == JAP_TERMINATION) && *s != '\0') s++;
+				if (*s != '\0')
+					s++;
+				continue;
 			}
-		} while (IsAnsiCharacter(s));
+			w += GetCharacterSize(*s - ' ');
+			s++;
+		}
 	} else
 #endif
 	{
@@ -1484,19 +1488,28 @@ CFont::GetNextSpace(wchar *s)
 {
 #ifdef MORE_LANGUAGES
 	if (IsJapanese()) {
-		do
-		{
-			if (*s != ' ' && *s != '\0') {
-				do {
-					while (*s == '~' || *s == JAP_TERMINATION) {
-						s++;
-						while (!(*s == '~' || *s == JAP_TERMINATION)) s++;
-						s++;
-					}
-					++s;
-				} while (*s == '~' || *s == JAP_TERMINATION);
+		// CJK (REVC_CHINESE): Chinese text has no spaces - a whole run of
+		// CJK glyphs is one "word". The stock loop (advance one glyph, then
+		// let `while(IsAnsiCharacter)` fail) makes the caller's `s = t+1`
+		// skip TWO glyphs per iteration, so even-length strings died at
+		// the loop head `if(*s=='\0') return` before printing anything
+		// ("选项"/"退出游戏" vanished; odd-length "主菜单" survived).
+		// Scan to the end of the run instead: stop at the terminator or a
+		// real space; consume control tokens whole (like the non-JP path).
+		for (;;) {
+			if (*s == '\0' || *s == ' ')
+				return s;
+			if (*s == '~' || *s == JAP_TERMINATION) {
+				s++;
+				while (!(*s == '~' || *s == JAP_TERMINATION) && *s != '\0')
+					s++;
+				if (*s == '\0')
+					return s;	// unterminated token: stop at end
+				s++;		// past the closer
+				continue;
 			}
-		} while (IsAnsiCharacter(s));
+			s++;
+		}
 	} else
 #endif
 	{
