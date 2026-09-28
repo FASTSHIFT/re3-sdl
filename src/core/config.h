@@ -515,8 +515,15 @@ static_assert(false, "SUPPORT_XBOX_SCRIPT and SUPPORT_MOBILE_SCRIPT are mutually
 	#define IGNORE_MOUSE_KEYBOARD // ignore mouse & keyboard input
 #endif
 
-#ifdef __SWITCH__
-	#define USE_UNNAMED_SEM // named semaphores are unsupported on the switch
+#if defined(__SWITCH__) || defined(REVC_R36S)
+        // Switch: named semaphores unsupported. R36S (dArkOS): named semaphores
+        // live in /dev/shm and are fragile - a leftover root-owned sem.* (from
+        // a sudo test run) makes later user runs fail sem_open -> ASSERT at
+        // CdStreamPosix.cpp CdStreamInitThread; and having the backing file
+        // unlinked mid-run breaks cross-thread wakeup (device hang observed:
+        // CdStreamSync sem_wait forever after /dev/shm/sem.* disappeared at
+        // runtime). Anonymous semaphores need no filesystem at all.
+        #define USE_UNNAMED_SEM
 #endif
 
 #endif // VANILLA_DEFINES
