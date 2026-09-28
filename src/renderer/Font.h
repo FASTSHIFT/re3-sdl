@@ -58,6 +58,13 @@ struct CFontRenderState
 	bool8 proportional;
 	bool8 anonymous_14;
 	int16 style;
+	// CJK (REVC_CHINESE): shadow state snapshot. The submit path's shadow
+	// recursion (FONT_BANK/STANDARD) temporarily clears dropShadowPosition
+	// in the global Details; the CJK inline shadow in PrintChar therefore
+	// cannot read Details at replay time (later submitters clobber it -
+	// bottom menu rows lost their shadows, docs/05 A1). Snapshot instead.
+	int16 dropShadowPosition;
+	CRGBA dropColor;
 };
 
 class CSprite2d;

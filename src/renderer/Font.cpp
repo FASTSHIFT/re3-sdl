@@ -53,6 +53,21 @@ bool16 CFont::NewLine;
 CSprite2d CFont::Sprite[MAX_FONTS];
 CFontRenderState CFont::RenderState;
 
+// Font pipeline trace (docs/05/06): REVC_FONT_TRACE=1 enables per-draw logging
+// for the submit->replay chain. Read Details-vs-RenderState mismatches live.
+static bool sFontTraceOn = false;
+static bool sFontTraceChecked = false;
+static inline bool FontTrace(void)
+{
+	if (!sFontTraceChecked) {
+		sFontTraceChecked = true;
+		const char *e = getenv("REVC_FONT_TRACE");
+		sFontTraceOn = (e && e[0] && e[0] != '0');
+	}
+	return sFontTraceOn;
+}
+#define FONTTRACE(...) do { if (FontTrace()) { printf("[FTRACE] " __VA_ARGS__); fflush(stdout); } } while (0)
+
 #ifdef MORE_LANGUAGES
 uint8 CFont::LanguageSet = FONT_LANGSET_EFIGS;
 int32 CFont::Slot = -1;
@@ -524,6 +539,13 @@ CFont::DrawButton(float x, float y)
 	if (x <= 0.0f || x > SCREEN_WIDTH || y <= 0.0f || y > SCREEN_HEIGHT)
 		return;
 
+#ifdef REVC_FONT_HARNESS
+	{
+		extern void FontHarness_RecordIcon(float, float);
+		FontHarness_RecordIcon(x, y);
+	}
+#endif
+
 	if (PS2Symbol != BUTTON_NONE) {
 		CRect rect;
 		rect.left = x;
@@ -561,10 +583,19 @@ CFont::PrintChar(float x, float y, wchar c)
 	float xoff = c % 16;
 	float yoff = c / 16;
 #ifdef MORE_LANGUAGES
-	if (IsJapaneseFont()) {
+	// N1 guard: at replay time the style test must use the segment snapshot
+	// (RenderState), not the live Details - a later submission may already
+	// have switched it, sending CJK glyphs down the Latin path (segment
+	// vanishes) or Latin digits down the CJK path (garbled UVs).
+	if (IsJapanese() && (Details.style == FONT_JAPANESE || RenderState.style == FONT_JAPANESE)) {
 		w = CJK_CELLW;
 		xoff = (float)(c % CJK_COLS);
 		yoff = c / CJK_COLS;
+		FONTTRACE("  PC cjk c=%d x=%.1f y=%.1f R.sx=%.2f D.sx=%.2f R.style=%d D.style=%d R.dropS=%d R.shadow=%d %s\n",
+		          c, x, y, RenderState.scaleX, Details.scaleX, RenderState.style, Details.style,
+		          RenderState.dropShadowPosition, RenderState.bIsShadow,
+		          (RenderState.scaleX != Details.scaleX ||
+		           RenderState.style != Details.style) ? "<<MISMATCH" : "");
 	}
 #endif
 
@@ -607,19 +638,31 @@ CFont::PrintChar(float x, float y, wchar c)
 				xoff / 16.0f, (yoff + 1.0f) / 12.8f - 0.009f,
 				(xoff + 1.0f) / 16.0f - 0.001f, (yoff + 1.0f) / 12.8f - 0.0021f + 0.01f);
 #ifdef MORE_LANGUAGES
-	}else if (IsJapaneseFont()) {
+	}else if (IsJapanese() && (Details.style == FONT_JAPANESE || RenderState.style == FONT_JAPANESE)) {
 		// CJK path (REVC_CHINESE): atlas cell = c, grid CJK_COLS wide.
 		// Geometry matches tools/l10n/gen_cn_font.py (see Font.h macros).
+		// All geometry reads the RenderState snapshot (docs/05 A1/N1): the
+		// live Details may already belong to a later submission - smaller
+		// scale, shadows cleared - which made bottom menu rows render
+		// half-size with no shadow (GDB + REVC_FONT_TRACE confirmed:
+		// R.sx=0.90 D.sx=0.45 on y=527/567/691 rows).
 		float w = CJK_CELLW;
 		float xoff = (float)(c % CJK_COLS);
 		float yoff = c / CJK_COLS;
-		if (Details.dropShadowPosition != 0) {
+		// Shadow: the segment was submitted with a shadow when the submit
+		// path ran the recursion (bIsShadow==false) AND the submitter had
+		// dropShadowPosition!=0. The snapshot lacks those fields, so mirror
+		// them via two spare shadow-state channels: use RenderState.slant
+		// presence? No - keep it simple and read Details ONLY for the shadow
+		// toggle is wrong (later submitter clears it). Instead: extend the
+		// snapshot (see CFontRenderState in Font.h).
+		if (RenderState.dropShadowPosition != 0) {
 			CSprite2d::AddToBuffer(
-				CRect(x + SCREEN_SCALE_X(Details.dropShadowPosition),
-					y + SCREEN_SCALE_Y(Details.dropShadowPosition),
-					x + SCREEN_SCALE_X(Details.dropShadowPosition) + CJK_DRAWW * Details.scaleX,
-					y + SCREEN_SCALE_Y(Details.dropShadowPosition) + CJK_DRAWH * Details.scaleY),
-				Details.dropColor,
+				CRect(x + SCREEN_SCALE_X(RenderState.dropShadowPosition),
+					y + SCREEN_SCALE_Y(RenderState.dropShadowPosition),
+					x + SCREEN_SCALE_X(RenderState.dropShadowPosition) + CJK_DRAWW * RenderState.scaleX,
+					y + SCREEN_SCALE_Y(RenderState.dropShadowPosition) + CJK_DRAWH * RenderState.scaleY),
+				RenderState.dropColor,
 				xoff * w / CJK_TEXW, yoff / CJK_ROWS_UV,
 				xoff * w / CJK_TEXW + (1.0f / CJK_COLS) - 0.001f, yoff / CJK_ROWS_UV,
 				xoff * w / CJK_TEXW, (yoff + 1.0f) / CJK_ROWS_UV,
@@ -627,8 +670,8 @@ CFont::PrintChar(float x, float y, wchar c)
 		}
 		CSprite2d::AddToBuffer(
 			CRect(x, y,
-				x + CJK_DRAWW * Details.scaleX,
-				y + CJK_DRAWH * Details.scaleY),
+				x + CJK_DRAWW * RenderState.scaleX,
+				y + CJK_DRAWH * RenderState.scaleY),
 			RenderState.color,
 			xoff * w / CJK_TEXW, yoff / CJK_ROWS_UV,
 			xoff * w / CJK_TEXW + (1.0f / CJK_COLS) - 0.001f, yoff / CJK_ROWS_UV,
@@ -685,6 +728,12 @@ CFont::RenderFontBuffer()
 	Sprite[RenderState.style].SetRenderState();
 	RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)TRUE);
 	RenderState = *(CFontRenderState*)&FontRenderStateBuf[0];
+	FONTTRACE("FLUSH seg style=%d sx=%.2f sy=%.2f shadow=%d pos=%.0f,%.0f | live D.style=%d sx=%.2f dropS=%d %s\n",
+	          RenderState.style, RenderState.scaleX, RenderState.scaleY, RenderState.bIsShadow,
+	          RenderState.fTextPosX, RenderState.fTextPosY,
+	          Details.style, Details.scaleX, Details.dropShadowPosition,
+	          (RenderState.style != Details.style ||
+	           RenderState.scaleX != Details.scaleX) ? "<<MISMATCH" : "");
 	textPosX = RenderState.fTextPosX;
 	textPosY = RenderState.fTextPosY;
 	color = RenderState.color;
@@ -702,62 +751,70 @@ CFont::RenderFontBuffer()
 
 			pRenderStateBufPointer = tmpPointer;
 
+			FONTTRACE("  SEG style=%d sx=%.2f sy=%.2f shadow=%d pos=%.0f,%.0f | D.style=%d D.sx=%.2f dropS=%d %s\n",
+			          RenderState.style, RenderState.scaleX, RenderState.scaleY, RenderState.bIsShadow,
+			          RenderState.fTextPosX, RenderState.fTextPosY,
+			          Details.style, Details.scaleX, Details.dropShadowPosition,
+			          (RenderState.style != Details.style ||
+			           RenderState.scaleX != Details.scaleX ||
+			           RenderState.bIsShadow != (Details.dropShadowPosition != 0 && Details.bIsShadow)) ? "<<MISMATCH" : "");
 			textPosX = RenderState.fTextPosX;
 			textPosY = RenderState.fTextPosY;
 			color = RenderState.color;
 		}
 #ifdef MORE_LANGUAGES
-		if (*pRenderStateBufPointer.pStr == '~' ||
-		    (IsJapaneseFont() && *pRenderStateBufPointer.pStr == JAP_TERMINATION)) {
-			// CJK GXT stores tokens with the 0x8000 flag on every char
-			// (JAP_TERMINATION scheme). ParseToken only knows plain ASCII,
-			// so consume a flagged token here by scanning to the closing
-			// terminator; apply the same effects ParseToken would for the
-			// first char after the opener (color/icon).
-			if (*pRenderStateBufPointer.pStr == JAP_TERMINATION) {
-				wchar *tok = pRenderStateBufPointer.pStr + 1;
-				switch ((wchar)(*tok & 0x7FFF)) {
-				case 'B': bBold = !bBold; break;
-				case 'f': bFlash = !bFlash; break;
+		// CJK GXT (JAP_TERMINATION scheme): flagged tokens must be consumed
+		// here (their interior letters would otherwise be drawn as glyphs).
+		// Structure mirrors the upstream branch below: PS2Symbol cleared
+		// BEFORE decode, and the loop never renders the closer or steps
+		// past a segment boundary ('\0') - that off-by-one ate 48-byte
+		// segment headers as glyphs (vanishing cutscene subtitles).
+		if (*pRenderStateBufPointer.pStr == JAP_TERMINATION ||
+		    *pRenderStateBufPointer.pStr == '~') {
 #ifdef BUTTON_ICONS
-				case 'U': PS2Symbol = BUTTON_UP; break;
-				case 'D': PS2Symbol = BUTTON_DOWN; break;
-				case '<': PS2Symbol = BUTTON_LEFT; break;
-				case '>': PS2Symbol = BUTTON_RIGHT; break;
-				case 'X': PS2Symbol = BUTTON_CROSS; break;
-				case 'O': PS2Symbol = BUTTON_CIRCLE; break;
-				case 'Q': PS2Symbol = BUTTON_SQUARE; break;
-				case 'T': PS2Symbol = BUTTON_TRIANGLE; break;
-				case 'K': PS2Symbol = BUTTON_L1; break;
-				case 'M': PS2Symbol = BUTTON_L2; break;
-				case 'A': PS2Symbol = BUTTON_L3; break;
-				case 'J': PS2Symbol = BUTTON_R1; break;
-				case 'V': PS2Symbol = BUTTON_R2; break;
-				case 'C': PS2Symbol = BUTTON_R3; break;
-				case 'H': PS2Symbol = BUTTON_RSTICK_UP; break;
-				case 'L': PS2Symbol = BUTTON_RSTICK_DOWN; break;
-				case '(': PS2Symbol = BUTTON_RSTICK_LEFT; break;
-				case ')': PS2Symbol = BUTTON_RSTICK_RIGHT; break;
+			PS2Symbol = BUTTON_NONE;
 #endif
-				default: break;	// color tokens: keep current color
-				}
-				bool closed = false;
-				while (*pRenderStateBufPointer.pStr &&
-				       *pRenderStateBufPointer.pStr != JAP_TERMINATION &&
-				       *pRenderStateBufPointer.pStr != '~')
-					pRenderStateBufPointer.pStr++;
-				if (*pRenderStateBufPointer.pStr) {
-					pRenderStateBufPointer.pStr++;	// past the closer
-					closed = true;
-				}
-				// the for-loop's pStr++ would eat the next real glyph;
-				// step back so the increment lands past the closer
-				// (only when a closer was found; unterminated tokens run to
-				// the end of the buffer and must not step back)
-				if (closed)
-					pRenderStateBufPointer.pStr--;
-			} else
-				pRenderStateBufPointer.pStr = ParseToken(pRenderStateBufPointer.pStr, color, bFlash, bBold);
+			wchar *tokStart = pRenderStateBufPointer.pStr;
+			wchar tokChar = (wchar)(tokStart[1] & 0x7FFF);
+			wchar closer = (*tokStart == JAP_TERMINATION) ? JAP_TERMINATION : '~';
+			// scan the token body: from opener+1 to the matching closer
+			wchar *scan = tokStart + 1;
+			while (*scan && *scan != JAP_TERMINATION && *scan != '~')
+				scan++;
+			bool closed = (*scan != '\0');
+			switch (tokChar) {
+			case 'B': bBold = !bBold; break;
+			case 'f': bFlash = !bFlash; break;
+			case 'N': case 'n': NewLine = true; break;
+#ifdef BUTTON_ICONS
+			case 'U': PS2Symbol = BUTTON_UP; break;
+			case 'D': PS2Symbol = BUTTON_DOWN; break;
+			case '<': PS2Symbol = BUTTON_LEFT; break;
+			case '>': PS2Symbol = BUTTON_RIGHT; break;
+			case 'X': PS2Symbol = BUTTON_CROSS; break;
+			case 'O': PS2Symbol = BUTTON_CIRCLE; break;
+			case 'Q': PS2Symbol = BUTTON_SQUARE; break;
+			case 'T': PS2Symbol = BUTTON_TRIANGLE; break;
+			case 'K': PS2Symbol = BUTTON_L1; break;
+			case 'M': PS2Symbol = BUTTON_L2; break;
+			case 'A': PS2Symbol = BUTTON_L3; break;
+			case 'J': PS2Symbol = BUTTON_R1; break;
+			case 'V': PS2Symbol = BUTTON_R2; break;
+			case 'C': PS2Symbol = BUTTON_R3; break;
+			case 'H': PS2Symbol = BUTTON_RSTICK_UP; break;
+			case 'L': PS2Symbol = BUTTON_RSTICK_DOWN; break;
+			case '(': PS2Symbol = BUTTON_RSTICK_LEFT; break;
+			case ')': PS2Symbol = BUTTON_RSTICK_RIGHT; break;
+#endif
+			default: break;
+			}
+			if (closed) {
+				pRenderStateBufPointer.pStr = scan + 1;	// past the closer
+				pRenderStateBufPointer.pStr--;		// loop's ++ re-advances
+			} else {
+				pRenderStateBufPointer.pStr = scan;	// end of segment: stop ON '\0'
+				pRenderStateBufPointer.pStr--;		// loop's ++ re-advances
+			}
 #ifdef BUTTON_ICONS
 			if(PS2Symbol != BUTTON_NONE) {
 				DrawButton(textPosX, textPosY);
@@ -892,6 +949,8 @@ CFont::PrintString(float x, float y, uint32, wchar *start, wchar *end, float spw
 
 	float dropShadowPosition = Details.dropShadowPosition;
 	if (dropShadowPosition != 0.0f && (Details.style == FONT_BANK || Details.style == FONT_STANDARD)) {
+		FONTTRACE("SUBMIT shadow-pass enter: style=%d dropS=%d (CJK style 3 skips this recursion -> PrintChar inline shadow)\n",
+		          Details.style, (int)dropShadowPosition);
 		CRGBA color = Details.color;
 		Details.color = Details.dropColor;
 		Details.dropShadowPosition = 0;
@@ -925,6 +984,8 @@ CFont::PrintString(float x, float y, uint32, wchar *start, wchar *end, float spw
 	pRenderState->proportional = Details.proportional;
 	pRenderState->style = Details.style;
 	pRenderState->bIsShadow = Details.bIsShadow;
+	pRenderState->dropShadowPosition = Details.dropShadowPosition;
+	pRenderState->dropColor = Details.dropColor;
 	FontRenderStatePointer.pRenderState++;
 
 	for(s = start; s < end;){
