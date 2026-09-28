@@ -18,6 +18,7 @@ mono_crash.*
 
 # Build results
 [Bb]uild-r36s/
+build-local/
 [Dd]ebug/
 [Dd]ebugPublic/
 [Rr]elease/
