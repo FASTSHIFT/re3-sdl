@@ -1,0 +1,11 @@
+# T06 button icon renders once, with sane gap (B1/B2/B3)
+# Mixed flagged + ASCII tokens exactly like the (Y) help text:
+#   ~h~(flagged) + ~T~(ascii icon) + ~w~(flagged) + CJK
+frame
+locale_style 1
+scale 1.0 1.0
+shadow 0
+print 320 100 {JTOKEN:h}{ICON:T}{JTOKEN:w}\u6309\u952e
+grab T06
+assert icon_count T06 1
+assert uv_in_atlas T06

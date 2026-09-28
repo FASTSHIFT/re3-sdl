@@ -1,0 +1,11 @@
+# T07 token at segment tail (N7: replay walks past the '\0' boundary)
+# A flagged token as the LAST element before end-of-string.
+frame
+locale_style 1
+scale 1.0 1.0
+shadow 0
+print 320 100 \u6309{JTOKEN:w}
+print 320 200 \u952e
+grab T07
+assert uv_in_atlas T07
+assert quad_count T07 2

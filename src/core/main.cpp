@@ -1756,6 +1756,37 @@ FrontendIdle(void)
 	DoFade();
 	Render2dStuffAfterFade();
 	CFont::DrawFonts();
+#ifdef REVC_FONT_TEST_HOOK
+	// Font E2E harness (docs/06): drive controlled submit sequences right
+	// after the menu has flushed its own text, so the capture starts clean.
+	{
+		static bool sHarnessArmedChecked = false;
+		static bool sHarnessActive = false;
+		// Arm only once the frontend has settled on a real menu page:
+		// the intro/logo phase also runs FrontendIdle and would arm too
+		// early, then leave GS_FRONTEND before the script could run.
+		if (!sHarnessArmedChecked) {
+			extern bool FontHarness_Arm(void);
+			if (FrontEndMenuManager.m_bMenuActive &&
+			    FrontEndMenuManager.m_nCurrScreen != MENUPAGE_NONE) {
+				sHarnessActive = FontHarness_Arm();
+				sHarnessArmedChecked = true;
+			}
+		}
+		if (sHarnessActive) {
+			extern bool FontHarness_Frame(void);
+			if (FontHarness_Frame()) {
+				CFont::DrawFonts();   // flush whatever the script submitted
+				extern int FontHarness_ExitCode(void);
+				if (FontHarness_ExitCode() == 0) {
+					RsGlobal.quit = TRUE;   // finished clean
+				}
+				// exit code 1 while not done = still running: keep going,
+				// the harness finishes on a later frame and quits itself.
+			}
+		}
+	}
+#endif
 #ifdef REVC_PERF_HUD
 	Hud_Draw();
 #endif

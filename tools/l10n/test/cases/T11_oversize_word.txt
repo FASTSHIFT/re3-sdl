@@ -1,0 +1,13 @@
+# T11 single word wider than the line (N4/N5 + the device hang)
+# A no-space CJK run wider than the whole wrap width: must not hang,
+# must produce sane quads (force-split), and GetNumberLines must agree.
+frame
+locale_style 1
+scale 1.0 1.0
+shadow 0
+wrapx 100.0
+print 50 100 \u8d85\u957f\u65e0\u7a7a\u683c\u8fde\u7eed\u4e2d\u6587\u5b57\u7b26\u4e32\u6d4b\u8bd5
+grab T11
+assert no_crash T11
+assert uv_in_atlas T11
+assert line_rows T11 50 100 \u8d85\u957f\u65e0\u7a7a\u683c\u8fde\u7eed\u4e2d\u6587\u5b57\u7b26\u4e32\u6d4b\u8bd5 5

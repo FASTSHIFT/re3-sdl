@@ -1,0 +1,17 @@
+# T12 measure == replay invariant, mixed everything (family gate)
+# CJK + digits + flagged colour + ASCII icon in one frame, several styles.
+frame
+locale_style 1
+scale 1.2 1.2
+shadow 0
+print 320 100 {JTOKEN:h}{ICON:T}{JTOKEN:w}\u4e0a\u4e0b\u8f7d\u5177
+locale_style 2
+scale 1.0 1.0
+print 320 200 12:34
+locale_style 1
+scale 0.9 0.9
+print 320 300 \u9000\u51fa\u6e38\u620f
+grab T12
+assert uv_in_atlas T12
+assert advance_match T12 8.0
+assert icon_count T12 1

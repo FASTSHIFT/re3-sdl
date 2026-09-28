@@ -1,0 +1,13 @@
+# T02 CJK segment then ASCII segment in the same frame (N1)
+# Style switch triggers flush while Details.style already flipped:
+# the CJK glyphs must still draw as CJK (not truncated to '\0').
+frame
+locale_style 1
+scale 1.0 1.0
+shadow 0
+print 320 100 \u4e2d\u6587\u6807\u7b7e
+locale_style 2
+print 320 200 12:34
+grab T02
+assert quad_count T02 6
+assert uv_in_atlas T02

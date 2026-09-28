@@ -1,0 +1,11 @@
+# T10 wrapped CJK line height (N3: rows must not overlap)
+# Long no-space CJK run wider than wrapx -> wraps; rows spaced by CJK_LINEH.
+frame
+locale_style 1
+scale 1.0 1.0
+shadow 0
+wrapx 200.0
+print 20 100 \u6309\u952e\u4e0a\u4e0b\u8f7d\u5177\u63d0\u793a\u6587\u672c\u6392\u7248\u957f\u53e5
+grab T10
+assert uv_in_atlas T10
+assert line_rows T10 20 100 \u6309\u952e\u4e0a\u4e0b\u8f7d\u5177\u63d0\u793a\u6587\u672c\u6392\u7248\u957f\u53e5 2

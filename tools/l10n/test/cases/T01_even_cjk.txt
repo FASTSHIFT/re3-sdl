@@ -1,0 +1,12 @@
+# T01 even-length CJK string renders (e20c6858 regression gate)
+# "选项" = 2 glyphs -> must emit 2 quads (+0 shadow), centred at 320.
+frame
+locale_style 1
+scale 1.0 1.0
+shadow 0
+color 255 255 255
+print 320 100 \u9009\u9879
+grab T01
+assert quad_count T01 2
+assert uv_in_atlas T01
+assert advance_match T01 6.0

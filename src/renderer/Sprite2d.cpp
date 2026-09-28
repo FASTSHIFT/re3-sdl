@@ -402,6 +402,12 @@ void CSprite2d::Draw2DPolygon(float x1, float y1, float x2, float y2, float x3, 
 void
 CSprite2d::AddToBuffer(const CRect &r, const CRGBA &c, float u0, float v0, float u1, float v1, float u3, float v3, float u2, float v2)
 {
+#ifdef REVC_FONT_HARNESS
+	{
+		extern void FontHarness_RecordQuad(const CRect&, const CRGBA&, float, float, float, float, float, float, float, float);
+		FontHarness_RecordQuad(r, c, u0, v0, u1, v1, u3, v3, u2, v2);
+	}
+#endif
 	SetVertices(&TempVertexBuffer.im2d[nextBufferVertex], r, c, c, c, c, u0, v0, u1, v1, u3, v3, u2, v2);
 	RwImVertexIndex *pIndexList = &TempBufferRenderIndexList[nextBufferIndex];
 	pIndexList[0] = nextBufferVertex;

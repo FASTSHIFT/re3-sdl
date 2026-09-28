@@ -1,0 +1,12 @@
+# T03 ASCII segment then CJK segment in the same frame (N1 inverse)
+# Digits must keep western UVs (16-col grid), NOT the 64-col CJK grid.
+frame
+locale_style 2
+scale 1.0 1.0
+shadow 0
+print 320 100 12:34
+locale_style 1
+print 320 200 \u4e2d\u6587\u6807\u7b7e
+grab T03
+assert quad_count T03 6
+assert uv_in_atlas T03

@@ -1,0 +1,14 @@
+# T09 prop-off digits: measure width == replay advance (N2/N11)
+# HUD timer digits with SetPropOff - the classic mismatch
+# (measure [209] vs replay [192], Size[0][3] all zero).
+frame
+locale_style 1
+scale 1.0 1.0
+shadow 0
+prop off
+print 320 100 12:34
+grab T09
+assert quad_count T09 5
+assert uv_in_atlas T09
+assert advance_match T09 6.0
+prop on

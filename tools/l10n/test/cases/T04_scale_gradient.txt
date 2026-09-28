@@ -1,0 +1,14 @@
+# T04 scale gradient within one frame (A1 / GDB 2.1)
+# Title at 1.5 then entries at 0.9: each segment's glyph spacing must be
+# internally consistent - the 1.5 segment must NOT draw with 0.9 geometry.
+frame
+locale_style 1
+scale 1.5 1.5
+shadow 0
+print 320 100 \u4e3b\u83dc\u5355
+scale 0.9 0.9
+print 320 200 \u5f00\u59cb\u6e38\u620f
+grab T04
+assert uv_in_atlas T04
+assert glyph_spacing T04 90 150 33.0 38.0 3.0
+assert glyph_spacing T04 190 230 19.0 24.0 3.0

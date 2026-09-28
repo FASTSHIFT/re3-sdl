@@ -1,0 +1,13 @@
+# T05 CJK drop-shadow stability (A1 shadow loss)
+# CJK text with shadow=2 followed by a second submission without shadow:
+# the first segment must keep all its shadow quads.
+frame
+locale_style 1
+scale 1.0 1.0
+shadow 2
+print 320 100 \u4e3b\u83dc\u5355
+shadow 0
+print 320 200 \u5f00\u59cb
+grab T05
+assert quad_count T05 5
+assert shadow_present T05 2.0 2.0
