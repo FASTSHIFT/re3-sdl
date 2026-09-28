@@ -1150,7 +1150,14 @@ CFont::PrintString(float xstart, float ystart, wchar *s)
 						x = xstart;
 #ifdef MORE_LANGUAGES
 					if (IsJapaneseFont())
+#ifdef REVC_CHINESE
+						// CJK glyph draw height is CJK_DRAWH*scaleY (24px);
+						// the stock Japanese half-height advance
+						// (32/2.75+2 = 15px at sy=1.1) overlaps rows.
+						y += CJK_LINEH;
+#else
 						y += 32.0f * Details.scaleY / 2.75f + 2.0f * Details.scaleY;
+#endif
 					else
 #endif
 						y += 32.0f * Details.scaleY * 0.5f + 2.0f * Details.scaleY;
