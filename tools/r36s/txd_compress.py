@@ -154,8 +154,49 @@ def parse_txd(path):
     return num_tex, textures, orig_payloads
 
 
+DDS_HDR_FLAGS = 0x1007     # CAPS|HEIGHT|WIDTH|PIXELFORMAT|MIPMAPCOUNT(裸最小集)
+DDS_PITCH = 0x8
+DDS_CAPS = 0x1000          # DDSCAPS_TEXTURE
+DDS_PF_FLAGS = 0x4         # DDPF_FOURCC
+DDS_MAGIC = b"DDS "
+
+
+def dxt_to_pil(tex, level=0):
+    """Decode one stored DXT level to RGBA by wrapping the raw blocks in a
+    minimal DDS header and letting Pillow decode it (uses librx - no
+    hand-rolled block decoder needed).
+
+    RW D3D8 DXT block layout is identical to DDS: rows of 4x4 blocks,
+    top-down. Pillow's DDS reader returns the image as stored, i.e. top-down.
+    """
+    dxt = tex.compression  # 1/3/5
+    w = max(4, tex.width)
+    h = max(4, tex.height)
+    blocks = tex.level_data[level]
+    bw = (w + 3) // 4
+    bh = (h + 3) // 4
+    expected = bw * bh * (8 if dxt == 1 else 16)
+    if len(blocks) < expected:
+        raise ValueError(
+            f"{tex.name}: DXT{dxt} level{level} {len(blocks)}B < {expected}B expected")
+    hdr = b"DDS "
+    hdr += struct.pack("<7I", 124, 0x1007, h, w, 0, 0, 1)
+    hdr += b"\x00" * 44
+    hdr += struct.pack("<II4sI", 32, 0x4, b"DXT%d" % dxt, 0)
+    hdr += struct.pack("<4I", 0, 0, 0, 0)
+    hdr += struct.pack("<5I", 0x1000, 0, 0, 0, 0)
+    assert len(hdr) == 128
+    img = Image.open(io.BytesIO(hdr + blocks[:expected]))
+    img.load()
+    # non-multiple-of-4 sizes were padded to 4 - crop back
+    img = img.crop((0, 0, tex.width, tex.height))
+    return img
+
+
 def tex_to_pil(tex):
     """Native pixels -> RGBA PIL Image (top level only)."""
+    if tex.compression in (1, 3, 5):
+        return dxt_to_pil(tex)
     if tex.format == FMT_C8888:
         img = Image.frombytes("RGBA", (tex.width, tex.height), tex.pixels, "raw", "BGRA")
         return img
@@ -194,10 +235,19 @@ def has_alpha(img):
 def compress_to_dxt(img, mode="dxt"):
     """RGBA Image -> (compression_code, [mip_compressed_bytes...]).
     mode: 'dxt' (desktop S3TC via ImageMagick), 'astc' (Mali R36S via astcenc).
-    ASTC code = block size (6); DXT code = 1|5.
-    Returns (0, []) if the texture is too small."""
+    ASTC code = block size (4); DXT code = 1|5.
+    Returns (0, []) if the texture is too small.
+
+    ASTC payloads are stored VERTICALLY FLIPPED: librw's GL3 raster layer is
+    bottom-up (rasterFromImage writes the image's last row to raster row 0),
+    and the reference d3d_to_gl3 conversion path applies flipDXT for the same
+    reason. Encoding the flipped image makes the GL-side content identical
+    to what the game renders with the original D3D8 DXTs (verified: PSNR
+    vs flipud(original) = 46-62dB; unflipped = 5-23dB = visibly wrong)."""
     if img.width < 4 or img.height < 4:
         return 0, []
+    if mode == "astc":
+        img = img.transpose(Image.FLIP_TOP_BOTTOM)
     with tempfile.TemporaryDirectory() as td:
         if mode == "astc":
             # astcenc does not chain mips - encode each level separately.
@@ -333,12 +383,6 @@ def main():
             out_list.append((tex, 0, []))
             continue
         try:
-            if tex.compression:
-                # already DXT in the source - keep verbatim
-                print(f"  keep {tex.name}: already DXT{tex.compression}")
-                out_list.append((tex, 0, []))
-                kept += 1
-                continue
             img = tex_to_pil(tex)
         except Exception as e:
             print(f"  keep {tex.name}: {e}")
@@ -351,6 +395,8 @@ def main():
             kept += 1
             continue
         old = len(tex.pixels) + (1024 if tex.palette else 0)
+        if tex.compression:
+            old = len(b"".join(tex.level_data))
         new = sum(len(m) for m in mips)
         saved += max(0, old - new)
         out_list.append((tex, compression, mips))
@@ -358,6 +404,9 @@ def main():
               f"{'ASTC' if ARGS.astc else 'DXT'}{compression} mips={len(mips)} {old}->{new}B")
     print(f"== {ARGS.input}: {len(textures)} textures, kept={kept} skipped={skipped}, "
           f"saved≈{saved/1024:.0f}KB (file payload)")
+    if not len(textures):
+        sys.exit(f"{ARGS.input}: parsed 0 textures - refusing to write an empty TXD "
+                 "(input is likely already GL3-native or corrupt)")
     if not ARGS.dry:
         write_txd(out_list, ARGS.output)
 
