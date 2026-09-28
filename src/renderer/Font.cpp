@@ -53,20 +53,27 @@ bool16 CFont::NewLine;
 CSprite2d CFont::Sprite[MAX_FONTS];
 CFontRenderState CFont::RenderState;
 
-// Font pipeline trace (docs/05/06): REVC_FONT_TRACE=1 enables per-draw logging
-// for the submit->replay chain. Read Details-vs-RenderState mismatches live.
-static bool sFontTraceOn = false;
+// Font pipeline trace (docs/05/06): REVC_FONT_TRACE selects a layer -
+//   1 / all : everything (FLUSH/SEG/PC/token/width)
+//   hud     : HUD-focused: width queries, replay advance, token effects
+//   replay  : FLUSH/SEG/PC only
+static int sFontTraceMode = 0;	// 0=off 1=all 2=hud 3=replay
 static bool sFontTraceChecked = false;
-static inline bool FontTrace(void)
+static inline int FontTraceMode(void)
 {
 	if (!sFontTraceChecked) {
 		sFontTraceChecked = true;
 		const char *e = getenv("REVC_FONT_TRACE");
-		sFontTraceOn = (e && e[0] && e[0] != '0');
+		if (e && e[0] && e[0] != '0') {
+			sFontTraceMode = 1;
+			if (e[0] == 'h' || (e[0] == '2')) sFontTraceMode = 2;	// hud
+			else if (e[0] == 'r') sFontTraceMode = 3;			// replay
+		}
 	}
-	return sFontTraceOn;
+	return sFontTraceMode;
 }
-#define FONTTRACE(...) do { if (FontTrace()) { printf("[FTRACE] " __VA_ARGS__); fflush(stdout); } } while (0)
+#define FONTTRACE(...) do { if (FontTraceMode()) { printf("[FTRACE] " __VA_ARGS__); fflush(stdout); } } while (0)
+#define FONTTRACE_HUD(...) do { if (FontTraceMode() == 1 || FontTraceMode() == 2) { printf("[FTRACE] " __VA_ARGS__); fflush(stdout); } } while (0)
 
 #ifdef MORE_LANGUAGES
 uint8 CFont::LanguageSet = FONT_LANGSET_EFIGS;
@@ -680,6 +687,10 @@ CFont::PrintChar(float x, float y, wchar c)
 #endif
 	} else {
 		if (bDontPrint) return;
+		FONTTRACE_HUD("PC latin c=%d('%c') x=%.1f y=%.1f w=%.2f R.sx=%.2f R.style=%d halfTex=%d half=%d\n",
+		              c, (c >= 32 && c < 127) ? c : '?', x, y, w, RenderState.scaleX,
+		              RenderState.style, RenderState.bFontHalfTexture,
+		              (Details.bFontHalfTexture && c == 208) ? 1 : 0);
 		CSprite2d::AddToBuffer(
 			CRect(x, y,
 				x + 32.0f * RenderState.scaleX * w,
@@ -769,8 +780,13 @@ CFont::RenderFontBuffer()
 		// BEFORE decode, and the loop never renders the closer or steps
 		// past a segment boundary ('\0') - that off-by-one ate 48-byte
 		// segment headers as glyphs (vanishing cutscene subtitles).
+		// After a closed token the pointer parks ON the closer; the
+		// loop's pStr++ then lands on the next real glyph without the
+		// closer itself ever being drawn (the trailing '~' in "Y~").
+		bool tokenConsumed = false;
 		if (*pRenderStateBufPointer.pStr == JAP_TERMINATION ||
 		    *pRenderStateBufPointer.pStr == '~') {
+			tokenConsumed = true;
 #ifdef BUTTON_ICONS
 			PS2Symbol = BUTTON_NONE;
 #endif
@@ -808,13 +824,18 @@ CFont::RenderFontBuffer()
 #endif
 			default: break;
 			}
-			if (closed) {
-				pRenderStateBufPointer.pStr = scan + 1;	// past the closer
-				pRenderStateBufPointer.pStr--;		// loop's ++ re-advances
-			} else {
-				pRenderStateBufPointer.pStr = scan;	// end of segment: stop ON '\0'
-				pRenderStateBufPointer.pStr--;		// loop's ++ re-advances
-			}
+			if (closed)
+				pRenderStateBufPointer.pStr = scan;	// park ON the closer; loop's ++ passes it
+			else
+				pRenderStateBufPointer.pStr = scan - 1;	// stop just before '\0'; loop's ++ lands ON it (segment switch)
+			FONTTRACE_HUD("TOK '%c' closed=%d icon=%d park=%d\n",
+			              tokChar >= 32 && tokChar < 127 ? tokChar : '?', closed,
+#ifdef BUTTON_ICONS
+			              PS2Symbol != BUTTON_NONE,
+#else
+			              0,
+#endif
+			              (int)*pRenderStateBufPointer.pStr);
 #ifdef BUTTON_ICONS
 			if(PS2Symbol != BUTTON_NONE) {
 				DrawButton(textPosX, textPosY);
@@ -832,6 +853,8 @@ CFont::RenderFontBuffer()
 			if (!RenderState.bIsShadow)
 				RenderState.color = color;
 		}
+		if (tokenConsumed)
+			continue;	// park handled; loop's pStr++ steps past the closer / onto '\0'
 #else
 		if (*pRenderStateBufPointer.pStr == '~') {
 #ifdef BUTTON_ICONS
@@ -886,6 +909,9 @@ CFont::RenderFontBuffer()
 		if (!RenderState.bFontHalfTexture && c == 30) c = 61; // wanted star
 #endif
 		textPosX += RenderState.scaleX * GetCharacterWidth(c);
+		FONTTRACE_HUD("ADV c=%d x->%.1f y=%.1f R.sx=%.2f R.style=%d halfTex=%d prop=%d\n",
+		              c, textPosX, textPosY, RenderState.scaleX, RenderState.style,
+		              RenderState.bFontHalfTexture, RenderState.proportional);
 		if (c == '\0')
 			textPosX += RenderState.fExtraSpace;
 	}
@@ -1471,33 +1497,59 @@ CFont::GetCharacterWidth(wchar c)
 {
 #ifdef MORE_LANGUAGES
 	if (IsJapanese()) {
+		float r;
+		// N2 (docs/05): non-proportional text (HUD clock/money use
+		// SetPropOff) must advance by the same "unprop" width the
+		// measurement path (GetCharacterSize) uses: Size[0][style][209].
+		// The stock JP branch read [192] - a stray value (9) from the
+		// half-texture second page - so digits advanced 9px while their
+		// glyphs are ~16px wide: clock/money ink overlapped (~70%).
+		// EFIGS table + snapshot style keeps HUD metrics identical to the
+		// English game regardless of language.
 		if (!RenderState.proportional)
-			return Size[0][Details.style][192];
-		if (c <= 94 || Details.style == FONT_HEADING || RenderState.style == FONT_BANK) {
+			r = Size[0][RenderState.style][209];
+		else if (c <= 94 || Details.style == FONT_HEADING || RenderState.style == FONT_BANK) {
 			switch (RenderState.style)
 			{
 			case FONT_JAPANESE:
-				return Size_jp[c];
+				r = Size_jp[c];
+				break;
 			default:
-				return Size[0][RenderState.style][c];
+				r = Size[0][RenderState.style][c];
+				break;
+			}
+		} else {
+			switch (RenderState.style)
+			{
+			case FONT_JAPANESE:
+				r = CJK_ADVANCE;
+				break;
+			case FONT_BANK:
+				r = 10.0f;
+				break;
+			default:
+				r = Size[0][RenderState.style][c];
+				break;
 			}
 		}
-
-		switch (RenderState.style)
-		{
-		case FONT_JAPANESE:
-			return CJK_ADVANCE;
-		case FONT_BANK:
-			return 10.0f;
-		default:
-			return Size[0][RenderState.style][c];
-		}
+		FONTTRACE_HUD("W c=%d prop=%d R.style=%d D.style=%d -> %.1f (tbl[0][%d][%d]=%d, [209]=%d)\n",
+		              c, RenderState.proportional, RenderState.style, Details.style, r,
+		              0, RenderState.style, RenderState.style >= 0 ? Size[0][RenderState.style][c < 210 ? c : 209] : -1,
+		              RenderState.style >= 0 && RenderState.style < 4 ? Size[0][RenderState.style][209] : -1);
+		return r;
 	}
 
-	else if (RenderState.proportional)
-		return Size[LanguageSet][RenderState.style][c];
-	else
-		return Size[LanguageSet][RenderState.style][209];
+	else if (RenderState.proportional) {
+		float r = Size[LanguageSet][RenderState.style][c];
+		FONTTRACE_HUD("W c=%d prop=1 R.style=%d -> %.1f (tbl[%d][%d][%d])\n",
+		              c, RenderState.style, r, (int)LanguageSet, RenderState.style, c);
+		return r;
+	} else {
+		float r = Size[LanguageSet][RenderState.style][209];
+		FONTTRACE_HUD("W c=%d prop=0 R.style=%d -> %.1f (tbl[%d][%d][209])\n",
+		              c, RenderState.style, r, (int)LanguageSet, RenderState.style);
+		return r;
+	}
 #else
 
 	if (RenderState.proportional)
