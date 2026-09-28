@@ -229,9 +229,31 @@ CStreaming::Init2(void)
 	ms_memoryAvailable = (_dwMemAvailPhys - 10*MB)/2;
 	if(ms_memoryAvailable < 65*MB)
 		ms_memoryAvailable = 65*MB;
+#ifdef REVC_R36S
+	// R36S (1GB board): the formula above trusts freeram at launch, which on
+	// dArkOS (EmulationStation + services resident) leaves several hundred
+	// MB "available" - the streaming budget then exceeds what the box can
+	// give, MakeSpaceFor's eviction threshold is never reached and memory
+	// grows monotonically while driving around (observed RSS 335MB / 47%
+	// of system RAM, still climbing). Cap the budget for the device;
+	// REVC_STREAM_BUDGET_MB overrides.
+	{
+		int cap = 96;
+		const char *e = getenv("REVC_STREAM_BUDGET_MB");
+		if (e && atoi(e) > 0)
+			cap = atoi(e);
+		if (ms_memoryAvailable > (size_t)cap * MB) {
+			debug("R36S: streaming budget capped %zuMB -> %dMB\n",
+			      ms_memoryAvailable/MB, cap);
+			ms_memoryAvailable = (size_t)cap * MB;
+		}
+	}
+#endif
 	desiredNumVehiclesLoaded = (int32)((ms_memoryAvailable / MB - 65) / 3 + 12);
 	if(desiredNumVehiclesLoaded > MAXVEHICLESLOADED)
 		desiredNumVehiclesLoaded = MAXVEHICLESLOADED;
+	if(desiredNumVehiclesLoaded < 6)
+		desiredNumVehiclesLoaded = 6;
 #else
 	ms_memoryAvailable = 65 * MB;
 	desiredNumVehiclesLoaded = 25;
@@ -3085,6 +3107,17 @@ CStreaming::MakeSpaceFor(int32 size)
 		extern size_t _dwMemAvailPhys;
 		ms_memoryAvailable = (_dwMemAvailPhys - 10 * MB) / 2;
 		if(ms_memoryAvailable < 65 * MB) ms_memoryAvailable = 65 * MB;
+#ifdef REVC_R36S
+		// same cap as Initialise() - see there for rationale
+		{
+			int cap = 96;
+			const char *e = getenv("REVC_STREAM_BUDGET_MB");
+			if (e && atoi(e) > 0)
+				cap = atoi(e);
+			if (ms_memoryAvailable > (size_t)cap * MB)
+				ms_memoryAvailable = (size_t)cap * MB;
+		}
+#endif
 	}
 #undef MB
 #endif
