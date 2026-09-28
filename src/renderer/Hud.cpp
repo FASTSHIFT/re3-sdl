@@ -686,7 +686,9 @@ void CHud::Draw()
 				CFont::SetRightJustifyOn();
 				CFont::SetRightJustifyWrap(0.0f);
 				CFont::SetBackGroundOnlyTextOff();
-				CFont::SetFontStyle(FONT_HEADING);
+				// CJK: localized label (CHSE) needs the locale font
+				// or glyphs render as solid blocks from the Latin bank.
+				CFont::SetFontStyle(FONT_LOCALE(FONT_HEADING));
 				CFont::SetPropOff();
 				CFont::SetDropShadowPosition(2);
 				CFont::SetDropColor(CRGBA(0, 0, 0, 255));
@@ -801,9 +803,8 @@ void CHud::Draw()
 					CFont::SetBackGroundOnlyTextOff();
 					CFont::SetDropShadowPosition(2);
 					CFont::SetDropColor(CRGBA(0, 0, 0, fZoneAlpha));
-					CFont::SetFontStyle(FONT_BANK);
-					CFont::SetColor(CRGBA(ZONE_COLOR.r, ZONE_COLOR.g, ZONE_COLOR.b, fZoneAlpha));
-
+                                        // CJK: zone names are localized text
+                                        CFont::SetFontStyle(FONT_LOCALE(FONT_BANK));
 					if (!CTheScripts::bPlayerIsInTheStatium)
 						CFont::PrintStringFromBottom(SCREEN_SCALE_FROM_RIGHT(32.0f), SCREEN_SCALE_FROM_BOTTOM(128.0f), m_ZoneToPrint);
 
@@ -899,7 +900,8 @@ void CHud::Draw()
 					CFont::SetRightJustifyOn();
 					CFont::SetRightJustifyWrap(0.0f);
 					CFont::SetBackGroundOnlyTextOff();
-					CFont::SetFontStyle(FONT_BANK);
+					// CJK: vehicle names are localized
+					CFont::SetFontStyle(FONT_LOCALE(FONT_BANK));
 					CFont::SetDropShadowPosition(2);
 					CFont::SetColor(CRGBA(VEHICLE_COLOR.r, VEHICLE_COLOR.g, VEHICLE_COLOR.b, fVehicleAlpha));
 					CFont::SetDropColor(CRGBA(0, 0, 0, fVehicleAlpha));
@@ -1355,7 +1357,8 @@ void CHud::Draw()
 				CFont::SetCentreOn();
 				CFont::SetCentreSize(SCREEN_SCALE_X(590.0f));
 				CFont::SetColor(CRGBA(255, 255, 0, BigMessageAlpha[0])); // unused color
-				CFont::SetFontStyle(FONT_HEADING);
+				// CJK: mission result text is localized
+				CFont::SetFontStyle(FONT_LOCALE(FONT_HEADING));
 
 				// Appearently sliding text in here was abandoned very early, since this text is centered now.
 
@@ -1412,7 +1415,8 @@ void CHud::Draw()
 
 				CFont::SetPropOn();
 				CFont::SetRightJustifyOn();
-				CFont::SetFontStyle(FONT_HEADING);
+				// CJK: WASTED/BUSTED is localized
+				CFont::SetFontStyle(FONT_LOCALE(FONT_HEADING));
 
 				CFont::SetDropShadowPosition(2);
 				CFont::SetDropColor(CRGBA(0, 0, 0, BigMessageAlpha[2]));
@@ -1607,7 +1611,8 @@ void CHud::DrawAfterFade()
 			CFont::SetPropOn();
 			CFont::SetRightJustifyWrap(SCALE_AND_CENTER_X(0.0f));
 			CFont::SetRightJustifyOn();
-			CFont::SetFontStyle(FONT_BANK);
+			// CJK: localized big message
+			CFont::SetFontStyle(FONT_LOCALE(FONT_BANK));
 			CFont::SetScale(FrontEndMenuManager.m_PrefsLanguage == CMenuManager::LANGUAGE_AMERICAN ? SCREEN_SCALE_X(1.7f) : SCREEN_SCALE_X(1.5f), SCREEN_SCALE_Y(1.8f));
 
 			if (BigMessageX[1] >= SCREEN_SCALE_FROM_RIGHT(20.0f)) {
