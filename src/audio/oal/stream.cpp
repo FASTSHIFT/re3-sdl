@@ -1103,8 +1103,20 @@ void audioFileOpsThread()
 			// Just a semaphore
 			std::unique_lock<std::mutex> queueMutex(gAudioThreadQueueMutex);
 			gAudioThreadCv.wait(queueMutex, [] { return gStreamsToProcess.size() > 0 || gStreamsToClose.size() > 0 || gAudioThreadTerm; });
-			if (gAudioThreadTerm)
+			if (gAudioThreadTerm) {
+				// Terminate() kills this thread while CStream::Close() may
+				// still have pending frees queued (MULTITHREADED_AUDIO only).
+				// Drain the close queue so decoders/buffers are freed.
+				while (!gStreamsToClose.empty()) {
+					auto streamToClose = gStreamsToClose.front();
+					gStreamsToClose.pop();
+					if (streamToClose.first) // pSoundFile
+						delete streamToClose.first;
+					if (streamToClose.second) // pBuffer
+						free(streamToClose.second);
+				}
 				return;
+			}
 
 			if (!gStreamsToClose.empty()) {
 				auto streamToClose = gStreamsToClose.front();
@@ -1309,6 +1321,15 @@ bool CStream::Open(const char* filename, uint32 overrideSampleRate)
 		m_bIExist = true;
 #endif
 		return true;
+	}
+
+	// Decoder could not open the file. Delete it right away: Close()
+	// bails out when !IsOpened(), so keeping the pointer would leak the
+	// decoder object every time playback of a missing track is attempted
+	// (LSan: 72B per try, e.g. absent radio tracks).
+	if (m_pSoundFile) {
+		delete m_pSoundFile;
+		m_pSoundFile = nil;
 	}
 	return false;
 }
