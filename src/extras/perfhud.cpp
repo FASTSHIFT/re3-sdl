@@ -134,6 +134,22 @@ Hud_Update(const HudMetrics *m)
 					printf(" %s=%.2f", sGpuMarks[i].name, sGpuMarks[i].gpuMs);
 			}
 			printf("\n");
+			// One-frame draw-call batching report every 4th log period
+			// (needs a trace captured during the previous frame; see the
+			// Begin/End hooks in main.cpp's RenderScene).
+			{
+				static int period = 0;
+				if(++period % 4 == 0) {
+					int draws, rsw, ssw, asw, runs;
+					rw::gl3::gl3DrawTraceReport(&draws, &rsw, &ssw, &asw, &runs);
+					int distinct, top1, top4;
+					rw::gl3::gl3DrawTraceRasters(&distinct, &top1, &top4);
+					if(draws > 0)
+						printf("[batch] draws=%d texsw=%d alphatestsw=%d alphasw=%d mergeable=%d (%.0f%% of draws) | distinct_tex=%d top1=%d top4=%d\n",
+						       draws, rsw, ssw, asw, runs, draws > 0 ? 100.0*runs/draws : 0.0,
+						       distinct, top1, top4);
+				}
+			}
 			aF = aC = aG = aP = aR = aE = aS = aDC = 0;
 			minF = 1e9;
 			maxF = 0;

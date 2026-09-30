@@ -143,10 +143,21 @@ psCameraShowRaster(RwCamera *camera)
 #else
 	if (FrontEndMenuManager.m_PrefsFrameLimiter || FrontEndMenuManager.m_bMenuActive)
 #endif
-		RwCameraShowRaster(camera, PSGLOBAL(window), rwRASTERFLIPWAITVSYNC);
-	else
-		RwCameraShowRaster(camera, PSGLOBAL(window), rwRASTERFLIPDONTWAIT);
+	{
 #ifdef REVC_PERF_HUD
+		rw::gl3::gl3GpuMarkerBegin("swap");
+#endif
+		RwCameraShowRaster(camera, PSGLOBAL(window), rwRASTERFLIPWAITVSYNC);
+	}
+	else
+	{
+#ifdef REVC_PERF_HUD
+		rw::gl3::gl3GpuMarkerBegin("swap");
+#endif
+		RwCameraShowRaster(camera, PSGLOBAL(window), rwRASTERFLIPDONTWAIT);
+	}
+#ifdef REVC_PERF_HUD
+	rw::gl3::gl3GpuMarkerEnd();
 	gPerfGpuMs = psTimer() - t0;
 	// Snapshot draw call counter after the GPU sync; reset for next frame.
 	gPerfDrawCalls = rw::gl3::gl3_get_and_reset_drawcalls();

@@ -59,6 +59,9 @@ void PerfHud_CollectGpuMarkers(void);
 namespace rw { namespace gl3 {
 void gl3GpuMarkerBegin(const char *name);
 void gl3GpuMarkerEnd(void);
+// Draw-call trace (batching feasibility; see gl3render.cpp).
+void gl3DrawTraceBegin(void);
+void gl3DrawTraceEnd(void);
 } }
 
 // Draw the HUD with the engine font/sprite system. Call from the 2D render

@@ -1646,9 +1646,11 @@ Idle(void *arg)
 #ifdef REVC_PERF_HUD
 		stageT0 = psTimer();
                 rw::gl3::gl3GpuMarkerBegin("scene");
+                rw::gl3::gl3DrawTraceBegin();
 #endif
                 RenderScene();
 #ifdef REVC_PERF_HUD
+                rw::gl3::gl3DrawTraceEnd();
                 rw::gl3::gl3GpuMarkerEnd();
 		gStageSceneMs = psTimer() - stageT0;
 #endif
