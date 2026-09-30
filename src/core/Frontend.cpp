@@ -486,7 +486,7 @@ CMenuManager::CMenuManager()
 #endif
 	m_PrefsVsync = 0;
 	m_PrefsVsyncDisp = 1;
-	m_PrefsFrameLimiter = 1;
+	m_PrefsFrameLimiter = 30;
 	m_PrefsLanguage = 0;
 	field_54 = 0;
 	m_PrefsAllowNastyGame = 1;
@@ -1179,9 +1179,26 @@ CMenuManager::DrawStandardMenus(bool activeScreen)
 				case MENUACTION_FRAMESYNC:
 					rightText = TheText.Get(m_PrefsVsyncDisp ? "FEM_ON" : "FEM_OFF");
 					break;
-				case MENUACTION_FRAMELIMIT:
-					rightText = TheText.Get(m_PrefsFrameLimiter ? "FEM_ON" : "FEM_OFF");
+				case MENUACTION_FRAMELIMIT: {
+					// Frame-rate selector (R36S): 30..60 in 5fps steps -> unlimited.
+					// m_PrefsFrameLimiter: 0 = unlimited, else the cap in fps.
+					// Old saves: "off"(0) loads as unlimited, "on"(1) as 30.
+					static wchar fpsText[16];
+					if (m_PrefsFrameLimiter == 0) {
+						rightText = TheText.Get("FEM_UNL");
+						if (!rightText) {
+							snprintf(asciiTemp, sizeof(asciiTemp), "N/A");
+							AsciiToUnicode(asciiTemp, fpsText);
+							rightText = fpsText;
+						}
+					}
+					else {
+						snprintf(asciiTemp, sizeof(asciiTemp), "%d", m_PrefsFrameLimiter);
+						AsciiToUnicode(asciiTemp, fpsText);
+						rightText = fpsText;
+					}
 					break;
+				}
 				case MENUACTION_TRAILS:
 					rightText = TheText.Get(CMBlur::BlurOn ? "FEM_ON" : "FEM_OFF");
 					break;
@@ -3169,6 +3186,10 @@ CMenuManager::LoadSettings()
 			CFileMgr::Read(fileHandle, (char*)&m_PrefsShowSubtitles, 1);
 			CFileMgr::Read(fileHandle, (char*)&m_PrefsUseWideScreen, 1);
 			CFileMgr::Read(fileHandle, (char*)&m_PrefsFrameLimiter, 1);
+			// new semantics: 0 = unlimited, else the cap in fps;
+			// migrate old "on" (1) saves to 30 and sync maxFPS
+			if (m_PrefsFrameLimiter == 1) m_PrefsFrameLimiter = 30;
+			RsGlobal.maxFPS = m_PrefsFrameLimiter > 0 ? m_PrefsFrameLimiter : 30;
 			CFileMgr::Read(fileHandle, (char*)&m_nDisplayVideoMode, 1);
 			CFileMgr::Read(fileHandle, m_PrefsSkinFile, 256);
 			CFileMgr::Read(fileHandle, (char*)&m_ControlMethod, 1);
@@ -4939,7 +4960,7 @@ CMenuManager::ProcessUserInput(uint8 goDown, uint8 goUp, uint8 optionSelected, u
 #endif
 					m_PrefsShowLegends = true;
 					m_PrefsVsyncDisp = true;
-					m_PrefsFrameLimiter = true;
+					m_PrefsFrameLimiter = 30;   // default cap; 0 = unlimited
 					m_PrefsRadarMode = 0;
 					m_PrefsShowHud = true;
 					m_nDisplayVideoMode = m_nPrefsVideoMode;
@@ -5242,7 +5263,12 @@ CMenuManager::ProcessOnOffMenuOptions()
 		SaveSettings(); // FIX: Again... This makes me very unhappy
 		break;
 	case MENUACTION_FRAMELIMIT:
-		m_PrefsFrameLimiter = !m_PrefsFrameLimiter;
+		// cycle the cap in 5fps steps; 0 = unlimited
+		if (m_PrefsFrameLimiter <= 0 || m_PrefsFrameLimiter >= 60)
+			m_PrefsFrameLimiter = 30;
+		else
+			m_PrefsFrameLimiter = ((m_PrefsFrameLimiter - 30) / 5 + 1) * 5 + 30;
+		RsGlobal.maxFPS = m_PrefsFrameLimiter ? m_PrefsFrameLimiter : 30;
 		SaveSettings();
 		break;
 	case MENUACTION_TRAILS:

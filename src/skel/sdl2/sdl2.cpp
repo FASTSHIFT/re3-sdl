@@ -1858,7 +1858,8 @@ main(int argc, char *argv[])
 								RsEventHandler(rsIDLE, (void *)TRUE);
 #endif
 							}
-							else {
+							else if (FrontEndMenuManager.m_PrefsFrameLimiter > 0){
+								// Frame cap selected in the menu (30..60 in 5fps steps); 0 = unlimited
 								float frameTime = 1000.0f / (float)RsGlobal.maxFPS;
 #ifdef REVC_R36S
 								// Sleep-based frame limiter: yield the CPU while waiting
