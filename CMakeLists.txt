@@ -43,6 +43,7 @@ option(${PROJECT}_LEAN_FX "Disable per-frame full-screen copies (SCREEN_DROPLETS
 option(${PROJECT}_PERF_HUD "Build the perf metrics HUD (FPS/CPU/GPU/draw calls, menu toggle)" ON)
 option(${PROJECT}_CHINESE "Simplified Chinese via the widened CJK font pipeline (needs JAPANESE.GXT + FONTS_J.TXD from tools/l10n)" OFF)
 option(${PROJECT}_FONT_HARNESS "Build the font rendering E2E test harness (docs/06; REVC_FONT_TEST=<script>)" OFF)
+option(${PROJECT}_TRIPLEBUF "Triple-buffer async present: camera ping-pong FBOs + present-blit (docs/09)" OFF)
 if(${PROJECT}_R36S)
 	add_compile_definitions(${PROJECT}_R36S)
 endif()
@@ -57,6 +58,24 @@ if(${PROJECT}_CHINESE)
 endif()
 if(${PROJECT}_FONT_HARNESS)
 	add_compile_definitions(${PROJECT}_FONT_HARNESS REVC_FONT_TEST_HOOK)
+endif()
+if(${PROJECT}_TRIPLEBUF)
+	add_compile_definitions(${PROJECT}_TRIPLEBUF)
+	# KMS bo present chain (device path): active when we build for the
+	# R36S's GLES/SDL stack - i.e. librw forced to GLES. PC builds keep the
+	# plain blit+swap fallback (Mesa has no blob-style surface fence).
+	if(LIBRW_GL3_GFXLIB STREQUAL "SDL2" AND LIBRW_FORCE_GLES)
+		add_compile_definitions(PRESENT_USE_KMS)
+		# Real drm/gbm headers vendored from the device (tools/r36s/include/
+		# drm-vendor) - the builder image has no libdrm-dev, and hand-rolled
+		# struct layouts got the drmModeRes field order wrong.
+		include_directories(${CMAKE_CURRENT_SOURCE_DIR}/tools/r36s/include/drm-vendor)
+		include_directories(${CMAKE_CURRENT_SOURCE_DIR}/tools/r36s/include/drm-vendor/libdrm)
+		# present_thread.cpp dlopen/dlsym's libdrm/libgbm at runtime, but
+		# uses EGL directly (display/context/sync for the present thread).
+		link_libraries(dl EGL)
+		message(STATUS "TRIPLEBUF: KMS bo present chain enabled (SDL2+GLES)")
+	endif()
 endif()
 
 set_property(CACHE ${PROJECT}_AUDIO PROPERTY STRINGS ${${PROJECT}_AUDIOS})

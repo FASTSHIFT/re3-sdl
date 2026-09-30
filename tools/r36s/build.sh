@@ -14,6 +14,10 @@ EXTRA_CMAKE="-DREVC_R36S=ON -DREVC_LEAN_FX=ON -DREVC_PERF_HUD=ON -DREVC_CHINESE=
 if [[ "${2:-}" == "--baseline" ]]; then
   EXTRA_CMAKE="-DREVC_R36S=OFF -DREVC_LEAN_FX=OFF -DREVC_PERF_HUD=ON -DREVC_CHINESE=OFF"
 fi
+# --triplebuf: async-present ping-pong FBOs (docs/09). Off by default.
+if [[ "${2:-}" == "--triplebuf" ]]; then
+  EXTRA_CMAKE="$EXTRA_CMAKE -DREVC_TRIPLEBUF=ON"
+fi
 IMAGE="${REVC_BUILDER_IMAGE:-revc-r36s-builder:focal}"
 mkdir -p "$REPO/build-r36s" "$HOME/.cache/revc-ccache"
 

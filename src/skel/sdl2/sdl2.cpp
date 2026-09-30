@@ -111,6 +111,127 @@ double gPerfGpuMs = 0.0;
 int gPerfDrawCalls = 0;
 #endif
 
+#ifdef REVC_TRIPLEBUF
+// Triple-buffer present chain (docs/09). librw's showRaster hands each
+// just-rendered camera FBO to this callback; the present thread blits the
+// oldest queued frame into a gbm bo and page-flips it (device), or - on PC
+// builds - this callback does a plain blit+swap on the main thread since
+// Mesa has no blob-style surface fence to hide.
+#include "gl3device_present.h"
+#include "../../../vendor/librw/src/gl/rwgl3impl.h"
+#ifdef PRESENT_USE_KMS
+#include <EGL/egl.h>
+#include <dlfcn.h>
+#endif
+static int sPresentW = 0, sPresentH = 0;
+#ifdef PRESENT_USE_KMS
+static int sKmsPresentActive = 0;
+#endif
+static void
+triplebufSubmitPC(uint32_t fbo, uint32_t tex)
+{
+	// PC fallback (docs/09 §5 step 2): blit into the window backbuffer and
+	// swap, on the main thread (SDL requires it). IMPORTANT: present the
+	// PREVIOUS frame. The just-rendered FBO is still being drawn by the GPU
+	// - blitting it reads a half-finished image (flicker). The previous
+	// frame's FBO completed long ago; the camera ping-pong guarantees it
+	// stays untouched until the next showRaster flip.
+	static uint32_t sPrevFbo = 0;
+	if (sPrevFbo) {
+		glBindFramebuffer(GL_READ_FRAMEBUFFER, sPrevFbo);
+		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+		glBlitFramebuffer(0, 0, sPresentW, sPresentH,
+		                  0, 0, sPresentW, sPresentH,
+		                  GL_COLOR_BUFFER_BIT, GL_NEAREST);
+		SDL_GL_SwapWindow(PSGLOBAL(window));
+	}
+	sPrevFbo = fbo;
+	(void)tex;
+}
+static void
+Present_Init_Skel(int w, int h)
+{
+	sPresentW = w; sPresentH = h;
+#ifdef PRESENT_USE_KMS
+	// Grab SDL KMSDRM's own drm fd (DRM master) + gbm_device + the EGL
+	// display/context it created - probe-verified on the device: this works
+	// and bo+AddFB+import+flip all succeed with these handles.
+	// The builder image's SDL headers are 2.0.10 (no kmsdrm SysWMinfo
+	// field); the layout has been ABI-stable since 2.0.16, so spell it out
+	// inline and pass version 2.0.16 for the negotiation.
+	{
+		typedef struct {
+			unsigned char major, minor, patch;
+		} MiniSDLVersion;
+		// SDL_SysWMinfo layout (2.0.16+, ABI-stable):
+		//   SDL_version version;   // 3 bytes + 1 padding
+		//   SDL_SYSWM_TYPE subsystem;   // @4
+		//   union { ... struct { int dev_index; int drm_fd;
+		//     struct gbm_device *gbm_dev; } kmsdrm; ... } info;   // @8
+		// SDL_SYSWM_KMSDRM == 13 since 2.0.16.
+		typedef struct {
+			MiniSDLVersion version;
+			int subsystem;
+			union {
+				char dummy[64];
+				struct { int dev_index; int drm_fd; void *gbm_dev; } kmsdrm;
+			} info;
+		} MiniWMInfo;
+		MiniWMInfo info;
+		memset(&info, 0, sizeof(info));
+		info.version.major = 2; info.version.minor = 16; info.version.patch = 0;
+		typedef int (*WMInfoFn)(void*, void*);
+		// SDL 2.0.10 headers (builder image) don't even declare
+		// SDL_GetWindowWMInfo; resolve at runtime from the linked libSDL2.
+		WMInfoFn getWMInfo = (WMInfoFn)dlsym(RTLD_DEFAULT, "SDL_GetWindowWMInfo");
+		if (getWMInfo && getWMInfo(PSGLOBAL(window), &info) && info.subsystem == 13
+		    && info.info.kmsdrm.drm_fd >= 0 && info.info.kmsdrm.gbm_dev) {
+			Present_SetDrmFd(info.info.kmsdrm.drm_fd);
+			// NOTE: eglGetCurrentDisplay() is NOT passed: the linked
+			// libEGL.so.1 is glvnd (no Mali vendor) - Present_SetGbm
+			// dlopen's libEGL.so (blob) and re-creates the display from
+			// the gbm device itself.
+			Present_SetGbm(info.info.kmsdrm.gbm_dev, NULL,
+			               (void*)SDL_GL_GetCurrentContext());
+			printf("[triplebuf] sdl kmsdrm: fd=%d gbm=%p\n",
+			       info.info.kmsdrm.drm_fd, info.info.kmsdrm.gbm_dev);
+		} else {
+			printf("[triplebuf] no kmsdrm handles (subsys=%d fd=%d gbm=%p) - falling back to swap\n",
+			       info.subsystem, info.info.kmsdrm.drm_fd, info.info.kmsdrm.gbm_dev);
+		}
+	}
+	if (Present_Init(w, h) == 0) {
+		Present_Start();
+		rw::gl3::gl3SetTriplebufSubmit(Present_Submit);
+		sKmsPresentActive = 1;
+	} else {
+		printf("[triplebuf] present chain init failed - falling back to swap\n");
+		rw::gl3::gl3SetTriplebufSubmit(triplebufSubmitPC);
+	}
+#else
+	rw::gl3::gl3SetTriplebufSubmit(triplebufSubmitPC);
+#endif
+	printf("[triplebuf] present chain up (%dx%d, %s)\n", w, h,
+#ifdef PRESENT_USE_KMS
+	       sKmsPresentActive ? "kms bo" : "pc blit+swap"
+#else
+	       "pc blit+swap"
+#endif
+	       );
+}
+static void
+Present_Shutdown_Skel(void)
+{
+	rw::gl3::gl3SetTriplebufSubmit(NULL);
+#ifdef PRESENT_USE_KMS
+	Present_Shutdown();
+#endif
+}
+#else
+static void Present_Init_Skel(int w, int h) { (void)w; (void)h; }
+static void Present_Shutdown_Skel(void) {}
+#endif
+
 /*
  *****************************************************************************
  */
@@ -123,6 +244,16 @@ psCameraBeginUpdate(RwCamera *camera)
 		RsEventHandler(rsACTIVATE, (void *)FALSE);
 		return FALSE;
 	}
+
+#ifdef REVC_TRIPLEBUF
+	// Lazy present-chain init on the first beginUpdate: the camera raster
+	// (and its ping-pong FBOs) exist by now with the real dimensions.
+	static bool sPresentInited = false;
+	if (!sPresentInited && camera) {
+		sPresentInited = true;
+		Present_Init_Skel(RsGlobal.maximumWidth, RsGlobal.maximumHeight);
+	}
+#endif
 
 	return TRUE;
 }
