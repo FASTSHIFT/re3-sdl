@@ -16,6 +16,8 @@
 #include "Font.h"
 #include "Text.h"
 
+#include "../../vendor/librw/src/gl/rwgl3impl.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -26,6 +28,24 @@ int8_t gPerfHudEnabled = -1;
 
 // Stage timings from Idle() (see main.cpp; zero-init each frame there).
 double gStageProcMs = 0.0, gStageRLMs = 0.0, gStagePreMs = 0.0, gStageSceneMs = 0.0;
+
+// ---- GPU timer-query markers (filled in PerfHud_CollectGpuMarkers) ---------
+static struct { char name[16]; double gpuMs; } sGpuMarks[8];
+static int sNumGpuMarks = 0;
+
+void
+PerfHud_CollectGpuMarkers(void)
+{
+        rw::gl3::G3GpuMarkerStat st[8];
+        int n = rw::gl3::gl3GpuFrameStats(st, 8);
+        if(n > 8) n = 8;
+        for(int i = 0; i < n; i++) {
+                strncpy(sGpuMarks[i].name, st[i].name, sizeof(sGpuMarks[i].name));
+                sGpuMarks[i].gpuMs = st[i].gpuMs;
+        }
+        sNumGpuMarks = n;
+        rw::gl3::gl3GpuMarkerFrameReset();
+}
 
 int
 Hud_Enabled(void)
@@ -66,7 +86,17 @@ Hud_Update(const HudMetrics *m)
 	else if(st.armMhz > 0)
 		snprintf(sLines[sNumLines++], sizeof(sLines[0]), "A:%dM", st.armMhz);
 	if(st.tempMilliC >= 0) snprintf(sLines[sNumLines++], sizeof(sLines[0]), "T:%.1fC", st.tempMilliC / 1000.0);
-
+        // GPU-side marker durations (timer queries; latest frame)
+        if(sNumGpuMarks > 0 && sNumLines < 8) {
+                char buf[48] = "G:";
+                for(int i = 0; i < sNumGpuMarks; i++) {
+                        char one[16];
+                        snprintf(one, sizeof(one), "%s%.1f ", sGpuMarks[i].name, sGpuMarks[i].gpuMs);
+                        if(strlen(buf) + strlen(one) >= sizeof(buf)) break;
+                        strcat(buf, one);
+                }
+                snprintf(sLines[sNumLines++], sizeof(sLines[0]), "%s", buf);
+        }
 	// ---- periodic log line (every 120 frames) -----------------------------
 	// Averages over the window; carries the full stage breakdown plus
 	// min/max frame time, which is too verbose for the on-screen HUD.
@@ -92,11 +122,18 @@ Hud_Update(const HudMetrics *m)
 			if(other < 0.0) other = 0.0;
 			printf("[perf] frame=%.2fms(min %.1f max %.1f) fps=%.0f | cpu=%.2f gpu=%.2f | "
 			       "proc=%.2f rl=%.2f pre=%.2f scene=%.2f other=%.2f | dc=%.0f | "
-			       "sys=%d%% mem=%dM/%d%% a=%dM g=%dM t=%.1fC\n",
+			       "sys=%d%% mem=%dM/%d%% a=%dM g=%dM t=%.1fC",
 			       aF / n, minF, maxF, aF > 0 ? 1000.0 / (aF / n) : 0.0,
 			       aC / n, aG / n, aP / n, aR / n, aE / n, aS / n, other,
 			       aDC / n, st.cpuPct, st.rssMb, st.sysMemPct, st.armMhz, st.gpuMhz,
 			       st.tempMilliC >= 0 ? st.tempMilliC / 1000.0 : 0.0);
+			// GPU-side marker durations (timer queries, drained at vsync)
+			if(sNumGpuMarks > 0) {
+				printf(" | gpu:");
+				for(int i = 0; i < sNumGpuMarks; i++)
+					printf(" %s=%.2f", sGpuMarks[i].name, sGpuMarks[i].gpuMs);
+			}
+			printf("\n");
 			aF = aC = aG = aP = aR = aE = aS = aDC = 0;
 			minF = 1e9;
 			maxF = 0;

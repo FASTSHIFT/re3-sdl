@@ -49,6 +49,18 @@ Hud_Update(const HudMetrics *m);
 // timers, read by the skeleton when it fills HudMetrics.
 extern double gStageProcMs, gStageRLMs, gStagePreMs, gStageSceneMs;
 
+// Read back the GPU timer-query markers placed around the render passes
+// (scene/fx/hud2d) after the vsync swap drained the pipeline, then reset
+// the marker set. Implemented in perfhud.cpp; called from the skeleton.
+void PerfHud_CollectGpuMarkers(void);
+
+// GPU timer-query marker bracing (librw gl3; forward-declared here so
+// engine code can place markers without pulling in rwgl3impl.h).
+namespace rw { namespace gl3 {
+void gl3GpuMarkerBegin(const char *name);
+void gl3GpuMarkerEnd(void);
+} }
+
 // Draw the HUD with the engine font/sprite system. Call from the 2D render
 // phase (after Render2dStuffAfterFade, before DoRWStuffEndOfFrame).
 // No-op if disabled.

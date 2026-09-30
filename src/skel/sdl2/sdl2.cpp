@@ -150,6 +150,10 @@ psCameraShowRaster(RwCamera *camera)
 	gPerfGpuMs = psTimer() - t0;
 	// Snapshot draw call counter after the GPU sync; reset for next frame.
 	gPerfDrawCalls = rw::gl3::gl3_get_and_reset_drawcalls();
+        // Collect the GPU timer-query markers for this frame (vsync just
+        // drained the pipeline, so the queries are complete). The marker
+        // set is then reset for the next frame's Begin/End pairs.
+        PerfHud_CollectGpuMarkers();
 #endif
 
 	return;

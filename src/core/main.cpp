@@ -1645,9 +1645,11 @@ Idle(void *arg)
 		tbStartTimer(0, "RenderScene");
 #ifdef REVC_PERF_HUD
 		stageT0 = psTimer();
+                rw::gl3::gl3GpuMarkerBegin("scene");
 #endif
-		RenderScene();
+                RenderScene();
 #ifdef REVC_PERF_HUD
+                rw::gl3::gl3GpuMarkerEnd();
 		gStageSceneMs = psTimer() - stageT0;
 #endif
 		tbEndTimer("RenderScene");
@@ -1670,11 +1672,23 @@ Idle(void *arg)
 #endif
 
 		tbStartTimer(0, "RenderMotionBlur");
+#ifdef REVC_PERF_HUD
+                rw::gl3::gl3GpuMarkerBegin("fx");
+#endif
 		TheCamera.RenderMotionBlur();
+#ifdef REVC_PERF_HUD
+                rw::gl3::gl3GpuMarkerEnd();
+#endif
 		tbEndTimer("RenderMotionBlur");
 
 		tbStartTimer(0, "Render2dStuff");
+#ifdef REVC_PERF_HUD
+                rw::gl3::gl3GpuMarkerBegin("hud2d");
+#endif
 		Render2dStuff();
+#ifdef REVC_PERF_HUD
+                rw::gl3::gl3GpuMarkerEnd();
+#endif
 		tbEndTimer("Render2dStuff");
 	}else{
 		CDraw::CalculateAspectRatio();
