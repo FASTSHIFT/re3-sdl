@@ -36,6 +36,9 @@ namespace rw { namespace gl3 { int gl3_get_and_reset_drawcalls(void); } }
 #include "AnimViewer.h"
 #include "Font.h"
 #include "MemoryMgr.h"
+#ifdef REVC_CHEATS
+#include "cheat_input.h"
+#endif
 
 #define MAX_SUBSYSTEMS		(16)
 
@@ -947,6 +950,9 @@ void psPostRWinit(void)
 	RwEngineGetVideoModeInfo(&vm, GcurSelVM);
 
 	_InputInitialiseJoys();
+#ifdef REVC_CHEATS
+	CheatInput_Init();   // parse cheats.ini (missing file = feature off, docs/10)
+#endif
 	_InputInitialiseMouse(false);
 
 	if(!(vm.flags & rwVIDEOMODEEXCLUSIVE))
@@ -2078,6 +2084,20 @@ void CapturePad(RwInt32 padID)
 
 	if (gamepad == nullptr)
 		return;
+
+#ifdef REVC_CHEATS
+	// Cheat-combo layer (docs/10): samples the standard SDL pad state
+	// directly (before any JoyState mapping). While the modifier (SELECT)
+	// is held the whole frame's state is suppressed, so entering a combo
+	// never leaks into gameplay - the same contract re3's evdev source has.
+	{
+		bool suppress = CheatInput_Process(gamepad, !!FrontEndMenuManager.m_bMenuActive);
+		if (suppress) {
+			memset(&ControlsManager.m_NewState, 0, sizeof(ControlsManager.m_NewState));
+			ControlsManager.m_NewState.numButtons = SDL_CONTROLLER_BUTTON_MAX - 1;
+		}
+	}
+#endif
 
 	SDL_Joystick* joy = SDL_GameControllerGetJoystick(gamepad);
 	int joyId = SDL_JoystickInstanceID(joy);

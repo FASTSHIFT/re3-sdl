@@ -1,0 +1,49 @@
+; cheats.ini.example - gamepad combo cheats (docs/10)
+; Copy to cheats.ini in the game directory to enable. Without cheats.ini
+; the feature is completely disabled (zero cost).
+;
+; Syntax:  <step[,step...]> = <cheat name>
+;   step   : keys joined with '+' (all pressed together), e.g. UP+UP
+;   sequence: steps separated with ',' - pressed in order, e.g. UP,UP,DOWN
+;   modifier (default SELECT) is folded into every step automatically:
+;   a combo only fires while the modifier is held; releasing it resets.
+; Comments start with ';' or '#'. Unknown keys/cheats warn and skip the line.
+;
+; Modifier can be changed:
+; modifier = L3+R3
+
+; ---- one-step combos (quick essentials) ----
+UP+UP = health
+DOWN+DOWN = armour
+TRIANGLE+TRIANGLE = money
+CROSS+CROSS = weapon1
+CIRCLE+CIRCLE = weapon2
+SQUARE+SQUARE = weapon3
+
+; ---- vehicles (whitelisted spawns) ----
+UP+TRIANGLE = vehicle_rhino
+UP+CIRCLE = vehicle_bloodra
+UP+SQUARE = vehicle_trash
+DOWN+TRIANGLE = vehicle_sabretur
+DOWN+CIRCLE = vehicle_caddy
+DOWN+SQUARE = vehicle_lovefist
+
+; ---- wanted level ----
+CROSS,CROSS,UP = wanted_up
+CIRCLE,CIRCLE,DOWN = wanted_down
+
+; ---- weather / time ----
+L1,R1 = sunny
+R1,L1 = rainy
+L1,L1 = fasttime
+R1,R1 = slowtime
+
+; ---- chaos (multi-step, harder to hit by accident) ----
+UP,UP,DOWN,DOWN,LEFT,RIGHT,LEFT,RIGHT = mayhem
+UP,UP,UP = blowupcars
+
+; ---- fun ----
+LEFT,LEFT,RIGHT,RIGHT = chittychitty
+DOWN,DOWN,UP,UP = kangaroo
+TRIANGLE,TRIANGLE,SQUARE = pinkcars
+SQUARE,SQUARE,TRIANGLE = blackcars

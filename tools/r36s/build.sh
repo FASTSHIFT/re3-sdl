@@ -18,6 +18,10 @@ fi
 if [[ "${2:-}" == "--triplebuf" ]]; then
   EXTRA_CMAKE="$EXTRA_CMAKE -DREVC_TRIPLEBUF=ON"
 fi
+# --cheats: gamepad combo cheats from cheats.ini (docs/10). Off by default.
+if [[ "${2:-}" == "--cheats" ]]; then
+  EXTRA_CMAKE="$EXTRA_CMAKE -DREVC_CHEATS=ON"
+fi
 IMAGE="${REVC_BUILDER_IMAGE:-revc-r36s-builder:focal}"
 mkdir -p "$REPO/build-r36s" "$HOME/.cache/revc-ccache"
 
