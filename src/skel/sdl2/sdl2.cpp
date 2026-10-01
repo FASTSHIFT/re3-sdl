@@ -66,6 +66,37 @@ static psGlobalType PsGlobal;
 static SDL_GameController* gamepad1 = nullptr;
 static SDL_GameController* gamepad2 = nullptr;
 
+// ---- preferred-pad selection (re3 semantics, docs/10 discussion) ----------
+// The R36S built-in gamepad (GO-Super) can never be unplugged, so the
+// original "first ADD wins the 1P slot" logic meant a connected external
+// controller always landed in the unused 2P slot and the menus (which read
+// CPad 0 only) ignored it. Instead - like re3's evdev backend - pick the
+// controller to feed 1P dynamically each frame, preferring external pads
+// over the built-in one. Unplugging the external pad falls back to the
+// built-in on the very next frame with no slot juggling.
+static bool
+is_builtin_pad(SDL_GameController *gc)
+{
+	if (!gc) return false;
+	const char *n = SDL_GameControllerName(gc);
+	if (!n) return false;
+	// R36S family built-ins; external pads (DualSense/Xbox/8BitDo...) don't
+	// match these. NOTE: parentheses are load-bearing (&& binds tighter
+	// than ||) - "GO-Super" OR (generic "Gamepad" but not "... Controller").
+	return strstr(n, "GO-Super") != nullptr
+	    || (strstr(n, "Gamepad") != nullptr && strstr(n, "Controller") == nullptr);
+}
+
+static SDL_GameController*
+preferred_gamepad(void)
+{
+	// first choice: any opened external controller
+	if (gamepad1 && !is_builtin_pad(gamepad1)) return gamepad1;
+	if (gamepad2 && !is_builtin_pad(gamepad2)) return gamepad2;
+	// fallback: built-in (or whatever we have)
+	return gamepad1 ? gamepad1 : gamepad2;
+}
+
 
 #define PSGLOBAL(var) (((psGlobalType *)(RsGlobal.ps))->var)
 
@@ -2031,10 +2062,18 @@ void CapturePad(RwInt32 padID)
 	static SDL_GameController* gamepad = nullptr;
 
 	if (padID == 0)
-		gamepad = gamepad1;
-	else if(padID == 1)
-		gamepad = gamepad2;
-	else
+		// 1P: dynamic preferred-pad selection (external > built-in, re3
+		// semantics) - see preferred_gamepad(). Falls back to whichever
+		// controller is open, so the built-in pad keeps working when nothing
+		// external is connected.
+		gamepad = preferred_gamepad();
+	else if(padID == 1) {
+		// 2P: the pad 1P is NOT using (external preferred for 1P may take
+		// either slot; give 2P the other one so both stay usable in the
+		// two-player mode)
+		SDL_GameController *p1 = preferred_gamepad();
+		gamepad = (p1 == gamepad1) ? gamepad2 : gamepad1;
+	} else
 		assert("invalid padID");
 
 	if (gamepad == nullptr)
@@ -2129,6 +2168,8 @@ void CapturePad(RwInt32 padID)
 
 void joysChangeCB(int jid, int event)
 {
+	printf("[joy] %s jid=%d\n", event == SDL_JOYDEVICEADDED ? "ADD" : "REMOVE", jid);
+	fflush(stdout);
 	if (event == SDL_JOYDEVICEADDED && !IsThisJoystickBlacklisted(jid)) {
 		if (PSGLOBAL(joy1id) == -1) {
 			assert(gamepad1 == nullptr);
@@ -2153,6 +2194,9 @@ void joysChangeCB(int jid, int event)
 			PSGLOBAL(joy2id) = SDL_JoystickInstanceID(joy);	// needed to get right ID for remove event
 		}
 
+	} else if (event == SDL_JOYDEVICEADDED) {
+		printf("[joy] ADD jid=%d BLACKLISTED\n", jid);
+		fflush(stdout);
 	} else if (event == SDL_JOYDEVICEREMOVED) {
 		if (PSGLOBAL(joy1id) == jid) {
 			assert(gamepad1 != nullptr);
