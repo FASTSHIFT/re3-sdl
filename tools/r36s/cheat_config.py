@@ -152,6 +152,8 @@ STR = {
 
 
 def L(lang):
+    if lang == "both":
+        return lambda key, **kw: " / ".join(v.format(**kw) for v in STR[key])
     idx = 1 if lang == "zh" else 0
     return lambda key, **kw: STR[key][idx].format(**kw)
 
@@ -164,7 +166,9 @@ def detect_lang():
         loc = ""
     if "zh" in env.lower() or "zh" in loc.lower():
         return "zh"
-    return "en"
+    # en_* systems get both languages side by side (the cheat list carries
+    # zh descriptions for the translated game build)
+    return "both"
 
 
 # ---- config file I/O ------------------------------------------------------
@@ -219,10 +223,19 @@ def write_config(path, modifier, mappings, t):
 # ---- cheat selection ------------------------------------------------------
 
 def list_cheats(lang="en"):
-    idx = 2 if lang == "zh" else 1
-    print(STR["avail"][1 if lang == "zh" else 0])
+    hdr_idx = 1 if lang == "zh" else 0
+    if lang == "both":
+        print(STR["avail"][0] + " / " + STR["avail"][1])
+    else:
+        print(STR["avail"][hdr_idx])
     for i, row in enumerate(CHEATS):
-        print(f"  {i:2d}. {row[0]:<20} {row[idx]}")
+        if lang == "zh":
+            desc = row[2]
+        elif lang == "both":
+            desc = f"{row[1]} / {row[2]}"
+        else:
+            desc = row[1]
+        print(f"  {i:2d}. {row[0]:<20} {desc}")
 
 
 def choose_cheat(t, lang):
@@ -458,7 +471,7 @@ def main():
     ap.add_argument("-o", "--output", default="cheats.ini", help="output path")
     ap.add_argument("--list", action="store_true", help="list cheats and exit")
     ap.add_argument("--no-pad", action="store_true", help="pick keys by name")
-    ap.add_argument("--lang", choices=["zh", "en"], help="force language")
+    ap.add_argument("--lang", choices=["zh", "en", "both"], help="force language")
     ap.add_argument("--selftest", action="store_true", help="run offline self-test")
     args = ap.parse_args()
 
