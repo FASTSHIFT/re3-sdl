@@ -3207,6 +3207,11 @@ CMenuManager::LoadSettings()
 	if (LoadINISettings()) {
 		LoadINIControllerSettings();
 	}
+	// Frame-rate selector (docs/10 §fps-selector): sync RsGlobal.maxFPS with
+	// whatever the ini (or the legacy .set read above) left in the pref -
+	// 0 = unlimited. Without this the menu cap only took effect after the
+	// user re-entered the option, so a restart looked like it "forgot" it.
+	RsGlobal.maxFPS = m_PrefsFrameLimiter > 0 ? m_PrefsFrameLimiter : 30;
 #endif
 
 #ifdef FIX_BUGS
