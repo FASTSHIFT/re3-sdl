@@ -487,6 +487,7 @@ CMenuManager::CMenuManager()
 	m_PrefsVsync = 0;
 	m_PrefsVsyncDisp = 1;
 	m_PrefsFrameLimiter = 30;
+	m_PrefsAutoAim = 1;
 	m_PrefsLanguage = 0;
 	field_54 = 0;
 	m_PrefsAllowNastyGame = 1;
@@ -1199,6 +1200,9 @@ CMenuManager::DrawStandardMenus(bool activeScreen)
 					}
 					break;
 				}
+				case MENUACTION_AUTOAIM:
+					rightText = TheText.Get(m_PrefsAutoAim ? "FEM_ON" : "FEM_OFF");
+					break;
 				case MENUACTION_TRAILS:
 					rightText = TheText.Get(CMBlur::BlurOn ? "FEM_ON" : "FEM_OFF");
 					break;
@@ -4966,6 +4970,7 @@ CMenuManager::ProcessUserInput(uint8 goDown, uint8 goUp, uint8 optionSelected, u
 					m_PrefsShowLegends = true;
 					m_PrefsVsyncDisp = true;
 					m_PrefsFrameLimiter = 30;   // default cap; 0 = unlimited
+					m_PrefsAutoAim = 1;
 					m_PrefsRadarMode = 0;
 					m_PrefsShowHud = true;
 					m_nDisplayVideoMode = m_nPrefsVideoMode;
@@ -5011,6 +5016,7 @@ CMenuManager::ProcessUserInput(uint8 goDown, uint8 goUp, uint8 optionSelected, u
 					TheCamera.m_fMouseAccelHorzntl = 0.0025f;
 					CVehicle::m_bDisableMouseSteering = true;
 					m_ControlMethod = CONTROL_STANDARD;
+					m_PrefsAutoAim = 1;
 #ifdef PC_PLAYER_CONTROLS
 					TheCamera.m_bUseMouse3rdPerson = true;
 #else
@@ -5274,6 +5280,10 @@ CMenuManager::ProcessOnOffMenuOptions()
 		else
 			m_PrefsFrameLimiter = ((m_PrefsFrameLimiter - 30) / 5 + 1) * 5 + 30;
 		RsGlobal.maxFPS = m_PrefsFrameLimiter ? m_PrefsFrameLimiter : 30;
+		SaveSettings();
+		break;
+	case MENUACTION_AUTOAIM:
+		m_PrefsAutoAim = !m_PrefsAutoAim;
 		SaveSettings();
 		break;
 	case MENUACTION_TRAILS:

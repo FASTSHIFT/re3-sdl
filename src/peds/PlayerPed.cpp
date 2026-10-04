@@ -24,6 +24,7 @@
 #include "PedPlacement.h"
 #include "VarConsole.h"
 #include "SaveBuf.h"
+#include "Frontend.h"
 
 #define PAD_MOVE_TO_GAME_WORLD_MOVE 60.0f
 
@@ -906,14 +907,15 @@ CPlayerPed::PlayerControl1stPersonRunAround(CPad *padUsed)
 	}
 
 	if (!CWeaponInfo::GetWeaponInfo(GetWeapon()->m_eWeaponType)->IsFlagSet(WEAPONFLAG_HEAVY) && padUsed->GetSprint()) {
-		m_nMoveState = PEDMOVE_SPRINT;
+		if (!m_pCurrentPhysSurface || (!m_pCurrentPhysSurface->bInfiniteMass || m_pCurrentPhysSurface->m_phy_flagA08))
+			m_nMoveState = PEDMOVE_SPRINT;
 	}
+
 	if (m_nPedState != PED_FIGHT)
 		SetRealMoveAnim();
 
-	if (!bIsInTheAir && !(CWeaponInfo::GetWeaponInfo(GetWeapon()->m_eWeaponType)->IsFlagSet(WEAPONFLAG_HEAVY)) &&
-		padUsed->JumpJustDown() && m_nPedState != PED_JUMP) {
-
+	if (!bIsInTheAir && !CWeaponInfo::GetWeaponInfo(GetWeapon()->m_eWeaponType)->IsFlagSet(WEAPONFLAG_HEAVY)
+		&& padUsed->JumpJustDown() && m_nPedState != PED_JUMP) {
 		ClearAttack();
 		ClearWeaponTarget();
 		if (m_nEvadeAmount != 0 && m_pEvadingFrom) {
@@ -1271,13 +1273,12 @@ CPlayerPed::ProcessPlayerWeapon(CPad *padUsed)
 			weapon == WEAPONTYPE_RUGER || weapon == WEAPONTYPE_M60 ||
 			weapon == WEAPONTYPE_CAMERA) {
 
-			if (padUsed->TargetJustDown() || TheCamera.m_bJustJumpedOutOf1stPersonBecauseOfTarget) {
-#ifdef FREE_CAM
-				if (CCamera::bFreeCam && TheCamera.Cams[0].Using3rdPersonMouseCam()) {
-					m_fRotationCur = CGeneral::LimitRadianAngle(-TheCamera.Orientation);
-					SetHeading(m_fRotationCur);
-				}
-#endif
+// R36S aim assist: with auto-aim on, M4/Ruger/M60 skip
+                        // 1st-person mode and use the 3rd-person lock-on path further below.
+                        bool skipFirstPerson = FrontEndMenuManager.m_PrefsAutoAim &&
+				(weapon == WEAPONTYPE_M4 || weapon == WEAPONTYPE_RUGER || weapon == WEAPONTYPE_M60);
+
+			if ((padUsed->TargetJustDown() || TheCamera.m_bJustJumpedOutOf1stPersonBecauseOfTarget) && !skipFirstPerson) {
 				if (weapon == WEAPONTYPE_ROCKETLAUNCHER)
 					TheCamera.SetNewPlayerWeaponMode(CCam::MODE_ROCKETLAUNCHER, 0, 0);
 				else if (weapon == WEAPONTYPE_SNIPERRIFLE || weapon == WEAPONTYPE_LASERSCOPE)
@@ -1421,14 +1422,14 @@ CPlayerPed::ProcessPlayerWeapon(CPad *padUsed)
 			// what??
 			if (!m_pPointGunAt
 #ifdef FREE_CAM
-				|| (!CCamera::bFreeCam && CCamera::m_bUseMouse3rdPerson)
+					|| (!CCamera::bFreeCam && CCamera::m_bUseMouse3rdPerson && !FrontEndMenuManager.m_PrefsAutoAim)
 #else
-				|| CCamera::m_bUseMouse3rdPerson
-#endif		
-			) {
-				ClearWeaponTarget();
-				return;
-			}
+					|| (CCamera::m_bUseMouse3rdPerson && !FrontEndMenuManager.m_PrefsAutoAim)
+#endif
+				) {
+					ClearWeaponTarget();
+					return;
+				}
 
 			if (m_pPointGunAt->IsPed() && (
 #ifndef AIMING_VEHICLE_OCCUPANTS
@@ -1457,8 +1458,13 @@ CPlayerPed::ProcessPlayerWeapon(CPad *padUsed)
 			TheCamera.SetNewPlayerWeaponMode(CCam::MODE_SYPHON, 0, 0);
 			TheCamera.UpdateAimingCoors(m_pPointGunAt->GetPosition());
 
-		} else if (!CCamera::m_bUseMouse3rdPerson) {
+		} else if (!CCamera::m_bUseMouse3rdPerson || FrontEndMenuManager.m_PrefsAutoAim) {
 			if (padUsed->TargetJustDown() || TheCamera.m_bJustJumpedOutOf1stPersonBecauseOfTarget)
+				FindWeaponLockOnTarget();
+			else if (FrontEndMenuManager.m_PrefsAutoAim && (CTimer::GetFrameCounter() % 15 == 0))
+				// R36S aim assist: while the aim button is held and nothing is
+				// locked yet, periodically grab the nearest enemy so aiming
+				// doesn't need precise stick work. 15 frames ~= 0.3s at 50fps.
 				FindWeaponLockOnTarget();
 		}
 	} else if (m_pPointGunAt) {

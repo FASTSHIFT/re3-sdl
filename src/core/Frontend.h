@@ -254,6 +254,7 @@ enum eMenuAction
 	MENUACTION_CTRLDISPLAY,
 	MENUACTION_FRAMESYNC,
 	MENUACTION_FRAMELIMIT,
+	MENUACTION_AUTOAIM,
 	MENUACTION_TRAILS,
 	MENUACTION_SUBTITLES,
 	MENUACTION_WIDESCREEN,
@@ -609,6 +610,7 @@ public:
 	int8 m_PrefsVsync;
 	int8 m_PrefsVsyncDisp;
 	int8 m_PrefsFrameLimiter;
+	int8 m_PrefsAutoAim;
 	int8 m_nPrefsAudio3DProviderIndex;
 	int8 m_PrefsSpeakers;
 	int8 m_PrefsDMA;
