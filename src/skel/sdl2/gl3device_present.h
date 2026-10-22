@@ -18,7 +18,9 @@ void Present_SetDrmFd(int fd);
 
 int  Present_Init(int w, int h);          // create bo pool / resources
 void Present_Start(void);                 // spawn the present thread
-void Present_Submit(uint32_t fbo, uint32_t tex); // main thread, per rendered frame
+// main thread, per rendered frame; nextTex = texture the next frame renders
+// into (returns only once the present thread is not reading it)
+void Present_Submit(uint32_t fbo, uint32_t tex, uint32_t nextTex);
 void Present_Poll(void);                  // optional diagnostics
 void Present_Shutdown(void);
 

@@ -1,23 +1,31 @@
 // present_thread.cpp - triple-buffer present chain (docs/09 §3.1)
 //
-// Takes the camera's just-rendered FBO (ping-pong pair in librw) and puts it
-// on screen WITHOUT ever touching the EGL window surface:
+// Puts the camera's just-rendered frame on screen WITHOUT ever touching the
+// EGL window surface:
 //
-//   main thread:  render -> FBO_A -> flip -> record (never swaps)
+//   main thread (Present_Submit, called from librw showRaster):
+//     - takes a FREE gbm scanout bo (waits up to 100ms, else drops the frame;
+//       SUBMITTED bos are never taken back - their fences belong to the
+//       present thread)
+//     - blits the camera FBO into it (bo imported as GL texture via dmabuf)
+//       on the game's own context, i.e. directly behind this frame's draws
+//     - fences render+blit and hands the bo to the present thread
+//     - GPU throttle: waits for the frame MAX_FRAMES_IN_FLIGHT ago
 //   present thread (this file):
-//     - takes the previous frame's completed FBO
-//     - blits it into a gbm scanout bo (imported as a GL texture FBO via
-//       dmabuf; on PC/SDL builds falls back to the window backbuffer)
-//     - queues a non-blocking drmModePageFlip (device) / SDL_GL_SwapWindow (PC)
-//     - waits for the flip event to return the bo to the pool
+//     - picks the newest COMPLETED submitted bo (older completed ones are
+//       dropped), flips it at most once per panel refresh (mode.vrefresh),
+//       and retires the previous front bo one period after the flip
+//   See docs/09 §8.
 //
-// The whole point: the blob EGL surface's per-swap fence (the ~10ms
+// The point: the blob EGL surface's per-swap fence (the ~10ms
 // poll(/dev/mali0) wait measured in docs/08 §7) never happens on the main
-// thread; CPU submit and GPU drain run in parallel.
+// thread, and the copy is never queued behind the NEXT frame on the GPU
+// (when the present thread did the blit, it waited a full frame in rain and
+// every other frame was dropped).
 //
 // Interface:
 //   Present_Init(w,h)          - create bo pool, KMS resources, thread
-//   Present_Submit(fbo,tex)    - main thread, after rendering a frame
+//   Present_Submit(fbo,tex,next) - main thread, after rendering a frame
 //   Present_Shutdown()
 //   Present_Poll()             - optional per-frame query: pending frames
 #include <stdio.h>
@@ -30,14 +38,25 @@
 #include <errno.h>
 #include <poll.h>
 #include <dlfcn.h>
+#include <time.h>
 
 #include "gl3device_present.h"
 
+static inline uint64_t
+mono_us(void)
+{
+	struct timespec ts;
+	clock_gettime(CLOCK_MONOTONIC, &ts);
+	return (uint64_t)ts.tv_sec * 1000000ull + (uint64_t)ts.tv_nsec / 1000ull;
+}
+
 // ------------------------------------------------------------------ config
-// 3 would be ideal (render + flip-pending + free) but the blob choked on
-// importing the 3rd bo's dmabuf as an FBO ("bo fbo 2 incomplete") - 2 is
-// enough: one being scanned out, one being blitted into.
-#define PRESENT_BO_COUNT 2
+// Scanout bo pool. 3 is the real triple buffer (one scanned out, one
+// waiting to latch, one being blitted into); with 2 the main thread may wait
+// up to one refresh period for a bo. The blob once refused to import the
+// 3rd bo as an FBO (on the old present-thread context); imports now run on
+// the main context and any bo that fails is dropped - at least 2 required.
+#define PRESENT_BO_COUNT 3
 
 // ------------------------------------------------------------------ state
 static struct {
@@ -56,9 +75,46 @@ static struct {
 	int sdlfd;
 	int hasSdlfd;
 
-	// frame handoff: main -> present
-	volatile int pendingCount;
-	struct { uint32_t fbo; uint32_t tex; } pending[4];
+	// frame handoff (main -> present), at the SCANOUT bo level.
+	// The main thread blits each finished frame into a free scanout bo right
+	// after rendering it (same GL context, so the copy executes on the GPU
+	// directly behind that frame - not behind the NEXT one, which is what the
+	// old present-thread blit did: in rain it waited ~22ms and every other
+	// frame was dropped). The present thread only waits for the fence and
+	// page-flips. Mailbox: one pending bo; a newer frame replaces it.
+	//
+	// Selection rule: the present thread flips the NEWEST frame whose GPU
+	// work has COMPLETED (older completed ones are dropped). It never waits
+	// on the newest SUBMITTED frame's fence while an older one is already
+	// done - waiting on the newest serialised the present loop onto the full
+	// GPU queue latency (~28ms) and dropped 20-48% of frames in rain.
+	int boState[PRESENT_BO_COUNT]; // BO_FREE / BO_MAIN / BO_SUBMITTED / BO_FLIPPING / BO_FRONT
+	void *boSync[PRESENT_BO_COUNT];   // fence of a SUBMITTED bo (owned by the present thread)
+	uint32_t boSeq[PRESENT_BO_COUNT]; // submit order
+	uint64_t boSubmitUs[PRESENT_BO_COUNT];
+	uint32_t seq;
+	int front;                     // bo currently scanned out, -1 = none yet
+	int flipping;                  // bo whose flip is queued but not latched yet
+	uint64_t lastFlipUs;           // when `flipping` was queued
+	pthread_cond_t freeCv;         // signalled when a bo becomes free
+
+	// GPU back-pressure (main thread only): one fence per submitted frame;
+	// before returning from Submit of frame N we wait for frame N-2. This
+	// caps the frames the CPU can queue ahead of the GPU. Without it the
+	// main thread (which no longer waits on any swap) ran hundreds of ms
+	// ahead: fence waits of 70-265ms, 80-90% of frames rendered then
+	// dropped - "stutters, then smooth, then stutters".
+#define MAX_FRAMES_IN_FLIGHT 2
+	void *inflightSync[MAX_FRAMES_IN_FLIGHT];
+	int inflightHead;
+	uint64_t gpuWaitUs;            // main thread time waiting on the GPU (throttle)
+
+	// stats; guarded by mtx, reported by the present thread every few seconds
+	uint32_t nSubmit, nDrop;
+	uint64_t backpressureUs;       // main thread time blocked inside Submit
+	// touched by the present thread only
+	uint32_t nFlip, nFlipErr;
+	uint32_t periodUs;             // panel refresh period (flip pacing)
 
 	// bo pool (device path)
 #ifdef PRESENT_USE_KMS
@@ -66,12 +122,13 @@ static struct {
 	struct gbm_device *gbm;
 	struct gbm_bo *bos[PRESENT_BO_COUNT];
 	uint32_t fbs[PRESENT_BO_COUNT];
-	int boBusy[PRESENT_BO_COUNT];    // 0 free, 1 pending flip
-	uint32_t boTex[PRESENT_BO_COUNT];  // dmabuf-imported textures
-	uint32_t boFbo[PRESENT_BO_COUNT];  // fbo rendering into boTex
+	uint32_t boTex[PRESENT_BO_COUNT];  // dmabuf-imported textures (main ctx)
+	uint32_t boFbo[PRESENT_BO_COUNT];  // main-ctx fbo drawing into boTex
 	uint32_t boEglImage[PRESENT_BO_COUNT];
 #endif
 } P;
+
+enum { BO_FREE = 0, BO_MAIN, BO_SUBMITTED, BO_FLIPPING, BO_FRONT, BO_DEAD };
 
 // ============================================================ PC (SDL) path
 // On the PC the "present" is just a swap on the main thread's context; the
@@ -85,7 +142,7 @@ int Present_Init(int w, int h) { (void)w; (void)h; return 0; }
 void Present_Start(void) {}
 void Present_Shutdown(void) {}
 void Present_Poll(void) {}
-void Present_Submit(uint32_t fbo, uint32_t tex) { (void)fbo; (void)tex; }
+void Present_Submit(uint32_t fbo, uint32_t tex, uint32_t nextTex) { (void)fbo; (void)tex; (void)nextTex; }
 void Present_SetGbm(void *gbm, void *eglDisplay, void *shareCtx) { (void)gbm; (void)eglDisplay; (void)shareCtx; }
 void Present_SetDrmFd(int fd) { (void)fd; }
 #endif // !PRESENT_USE_KMS
@@ -235,6 +292,48 @@ find_crtc_for_connector(int fd, drmModeRes *res, drmModeConnector *conn)
 	return -1;
 }
 
+// Import bo i as GL texture + fbo on the CURRENT context (main thread).
+static int
+import_bo(int i)
+{
+	if (!P.bos[i] || !eglCreateImageKHR || !eglDestroyImageKHR || !glEGLImageTargetTexture2DOES)
+		return -1;
+	int fd = p_gbm_bo_get_fd(P.bos[i]);
+	if (fd < 0) return -1;
+	EGLint attrs[] = {
+		EGL_WIDTH, (EGLint)P.modeW, EGL_HEIGHT, (EGLint)P.modeH,
+		EGL_LINUX_DRM_FOURCC_EXT, GBM_FORMAT_XRGB8888,
+		EGL_DMA_BUF_PLANE0_FD_EXT, fd,
+		EGL_DMA_BUF_PLANE0_OFFSET_EXT, 0,
+		EGL_DMA_BUF_PLANE0_PITCH_EXT, (EGLint)p_gbm_bo_get_stride(P.bos[i]),
+		EGL_NONE };
+	P.boEglImage[i] = (uint32_t)(uintptr_t)eglCreateImageKHR(gDpy, EGL_NO_CONTEXT,
+	                       EGL_LINUX_DMA_BUF_EXT, (EGLClientBuffer)NULL, attrs);
+	close(fd);
+	if (P.boEglImage[i] == 0) { printf("[present] import bo %d failed\n", i); return -1; }
+	GLuint tex = 0, fbo = 0;
+	glGenTextures(1, &tex);
+	P.boTex[i] = tex;
+	glBindTexture(GL_TEXTURE_2D, P.boTex[i]);
+	glEGLImageTargetTexture2DOES(GL_TEXTURE_2D, (void*)(uintptr_t)P.boEglImage[i]);
+	glGenFramebuffers(1, &fbo);
+	P.boFbo[i] = fbo;
+	glBindFramebuffer(GL_FRAMEBUFFER, P.boFbo[i]);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, P.boTex[i], 0);
+	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+		printf("[present] bo fbo %d incomplete (glerr=0x%x)", i, glGetError());
+		while (glGetError() != GL_NO_ERROR) {}
+		printf("\n");
+		glDeleteTextures(1, &tex);
+		glDeleteFramebuffers(1, &fbo);
+		P.boTex[i] = 0; P.boFbo[i] = 0;
+		if (P.boEglImage[i]) { eglDestroyImageKHR(gDpy, (EGLImageKHR)(uintptr_t)P.boEglImage[i]); P.boEglImage[i] = 0; }
+		return -1;
+	}
+	return 0;
+}
+
+
 int
 Present_Init(int w, int h)
 {
@@ -287,7 +386,15 @@ Present_Init(int w, int h)
 	if (P.modeW != (uint32_t)w || P.modeH != (uint32_t)h) {
 		printf("[present] NOTE: bo size %dx%d != mode %ux%u (blit scales)\n", w, h, P.modeW, P.modeH);
 	}
-	printf("[present] mode %ux%u conn=%u crtc=%u\n", P.modeW, P.modeH, gConnId, gCrtcId);
+	// Flip pacing follows the REAL panel refresh (the R36S panel runs 640x480
+	// at ~78Hz, not 60); the old hard-coded usleep(16000) assumed 60Hz.
+	{
+		uint32_t vr = gConn->modes[0].vrefresh;
+		if (vr < 30 || vr > 240) vr = 60;
+		P.periodUs = 1000000u / vr;
+		printf("[present] mode %ux%u@%uHz (flip period %uus) conn=%u crtc=%u\n",
+		       P.modeW, P.modeH, vr, P.periodUs, gConnId, gCrtcId);
+	}
 
 	// gbm + bo pool. Must use the SAME gbm device the EGL display was created
 	// from for imports to work; the caller passes it in via Present_SetGbm.
@@ -308,6 +415,41 @@ Present_Init(int w, int h)
 
 	pthread_mutex_init(&P.mtx, NULL);
 	pthread_cond_init(&P.cv, NULL);
+	pthread_cond_init(&P.freeCv, NULL);
+	for (int i = 0; i < PRESENT_BO_COUNT; i++) { P.boSync[i] = NULL; P.boSeq[i] = 0; P.boSubmitUs[i] = 0; }
+	P.seq = 0;
+	P.front = -1;
+	P.flipping = -1;
+	P.lastFlipUs = 0;
+	P.nSubmit = P.nDrop = P.nFlip = P.nFlipErr = 0;
+	P.backpressureUs = 0;
+	for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) P.inflightSync[i] = NULL;
+	P.inflightHead = 0;
+	P.gpuWaitUs = 0;
+
+	// Import the scanout bos as textures + FBOs on THIS thread: Present_Init
+	// runs on the main thread with the game's GL context current, and the
+	// main thread is the one that blits into them. Any bo the blob refuses
+	// is dropped; fewer than 2 usable bos -> fail (caller falls back to swap).
+	// librw has the camera FBO bound and caches texture/FBO bindings:
+	// restore exactly what was bound, or its cache goes stale.
+	GLint prevDraw = 0, prevRead = 0, prevTex = 0;
+	glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &prevDraw);
+	glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &prevRead);
+	glGetIntegerv(GL_TEXTURE_BINDING_2D, &prevTex);
+	int okcnt = 0;
+	for (int i = 0; i < PRESENT_BO_COUNT; i++) {
+		if (import_bo(i) == 0) { P.boState[i] = BO_FREE; okcnt++; }
+		else P.boState[i] = BO_DEAD;
+	}
+	glBindTexture(GL_TEXTURE_2D, (GLuint)prevTex);
+	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, (GLuint)prevDraw);
+	glBindFramebuffer(GL_READ_FRAMEBUFFER, (GLuint)prevRead);
+	if (okcnt < 2) {
+		printf("[present] only %d/%d bos usable on the main context - need 2\n", okcnt, PRESENT_BO_COUNT);
+		return -1;
+	}
+	printf("[present] %d/%d scanout bos imported (main-thread blit)\n", okcnt, PRESENT_BO_COUNT);
 	P.inited = 1;
 	return 0;
 }
@@ -362,155 +504,153 @@ Present_SetGbm(void *gbm, void *eglDisplay, void *shareCtx)
 	eglDestroySyncKHR = (PFNEGLDESTROYSYNCKHRPROC)p_eglGetProcAddress("eglDestroySyncKHR");
 	eglClientWaitSyncKHR = (PFNEGLCLIENTWAITSYNCKHRPROC)p_eglGetProcAddress("eglClientWaitSyncKHR");
 	eglWaitSyncKHR = (PFNEGLWAITSYNCKHRPROC)p_eglGetProcAddress("eglWaitSyncKHR");
-	printf("[present] share ctx ok (EGL %d.%d), exts %s\n", maj, min,
-	       eglCreateImageKHR && glEGLImageTargetTexture2DOES ? "ok" : "MISSING");
+	printf("[present] share ctx ok (EGL %d.%d), exts %s, fence %s\n", maj, min,
+	       eglCreateImageKHR && glEGLImageTargetTexture2DOES ? "ok" : "MISSING",
+	       eglCreateSyncKHR && eglDestroySyncKHR && (eglWaitSyncKHR || eglClientWaitSyncKHR)
+	           ? (eglWaitSyncKHR ? "server-wait" : "client-wait") : "MISSING (glFinish fallback)");
 }
 
-// Import bo i as GL texture + fbo (must run with gCtx current).
-static int
-import_bo(int i)
+// With P.mtx held: once the queued flip has certainly latched (one refresh
+// period after the flip call; SDL steals the flip events), the bo it
+// replaced on screen is no longer read and goes back to the pool.
+static void
+retire_if_due_locked(uint64_t now)
 {
-	int fd = p_gbm_bo_get_fd(P.bos[i]);
-	if (fd < 0) return -1;
-	EGLint attrs[] = {
-		EGL_WIDTH, (EGLint)P.modeW, EGL_HEIGHT, (EGLint)P.modeH,
-		EGL_LINUX_DRM_FOURCC_EXT, GBM_FORMAT_XRGB8888,
-		EGL_DMA_BUF_PLANE0_FD_EXT, fd,
-		EGL_DMA_BUF_PLANE0_OFFSET_EXT, 0,
-		EGL_DMA_BUF_PLANE0_PITCH_EXT, (EGLint)p_gbm_bo_get_stride(P.bos[i]),
-		EGL_NONE };
-	P.boEglImage[i] = (uint32_t)(uintptr_t)eglCreateImageKHR(gDpy, EGL_NO_CONTEXT,
-	                       EGL_LINUX_DMA_BUF_EXT, (EGLClientBuffer)NULL, attrs);
-	close(fd);
-	if (P.boEglImage[i] == 0) { printf("[present] import bo %d failed\n", i); return -1; }
-	GLuint tex = 0, fbo = 0;
-	glGenTextures(1, &tex);
-	P.boTex[i] = tex;
-	glBindTexture(GL_TEXTURE_2D, P.boTex[i]);
-	glEGLImageTargetTexture2DOES(GL_TEXTURE_2D, (void*)(uintptr_t)P.boEglImage[i]);
-	glGenFramebuffers(1, &fbo);
-	P.boFbo[i] = fbo;
-	glBindFramebuffer(GL_FRAMEBUFFER, P.boFbo[i]);
-	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, P.boTex[i], 0);
-	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
-		printf("[present] bo fbo %d incomplete (glerr=0x%x)", i, glGetError());
-		while (glGetError() != GL_NO_ERROR) {}
-		printf("\n");
-		glDeleteTextures(1, &tex);
-		glDeleteFramebuffers(1, &fbo);
-		P.boTex[i] = 0; P.boFbo[i] = 0;
-		if (P.boEglImage[i]) { eglDestroyImageKHR(gDpy, (EGLImageKHR)(uintptr_t)P.boEglImage[i]); P.boEglImage[i] = 0; }
-		return -1;
-	}
-	return 0;
+	if (P.flipping < 0 || now < P.lastFlipUs + P.periodUs) return;
+	if (P.front >= 0 && P.boState[P.front] == BO_FRONT)
+		P.boState[P.front] = BO_FREE;
+	P.front = P.flipping;
+	P.boState[P.front] = BO_FRONT;
+	P.flipping = -1;
+	pthread_cond_broadcast(&P.freeCv);
 }
 
-
-static GLuint gReadFbo = 0;
+static int
+sync_done(void *sync)
+{
+	if (!sync) return 1; // glFinish fallback: already complete
+	return eglClientWaitSyncKHR(gDpy, (EGLSyncKHR)sync, 0, 0) == EGL_CONDITION_SATISFIED_KHR;
+}
 
 static void *
 present_thread(void *arg)
 {
 	(void)arg;
+	// No GL work happens here (the blit runs on the main thread); the share
+	// context is made current only so EGL sync calls have a defined context.
 	p_eglMakeCurrent(gDpy, EGL_NO_SURFACE, EGL_NO_SURFACE, gCtx);
 
-	// import all bos on this context; a failed bo is skipped (the pool just
-	// runs one smaller) instead of killing the thread
-	int okcnt = 0;
-	for (int i = 0; i < PRESENT_BO_COUNT; i++)
-		if (import_bo(i) == 0) okcnt++; else P.bos[i] = NULL; // mark unusable
-	if (okcnt == 0) { printf("[present] fatal: no importable bo\n"); return NULL; }
-	printf("[present] thread: %d/%d bos imported\n", okcnt, PRESENT_BO_COUNT);
+	uint64_t lastReport = mono_us();
+	uint32_t rFlip = 0, rSub = 0, rDrop = 0;
+	uint64_t rBp = 0, rLat = 0, rGw = 0;
 
-	glViewport(0, 0, P.modeW, P.modeH);
-	glDisable(GL_DEPTH_TEST);
-	glDisable(GL_BLEND);
-	glDisable(GL_SCISSOR_TEST);
+	pthread_mutex_lock(&P.mtx);
+	while (!P.quit) {
+		retire_if_due_locked(mono_us());
 
-	// this thread's own read fbo (FBO state is per-context in GLES)
-	glGenFramebuffers(1, &gReadFbo);
-
-	while (1) {
-		uint32_t srcFbo = 0, srcTex = 0;
-		pthread_mutex_lock(&P.mtx);
-		while (!P.quit && P.pendingCount == 0)
-			pthread_cond_wait(&P.cv, &P.mtx);
-		if (P.quit && P.pendingCount == 0) { pthread_mutex_unlock(&P.mtx); break; }
-		srcFbo = P.pending[0].fbo;
-		srcTex = P.pending[0].tex;
-		memmove(&P.pending[0], &P.pending[1], sizeof(P.pending[0]) * 3);
-		P.pendingCount--;
-		pthread_mutex_unlock(&P.mtx);
-
-		// find a free bo
-		int bo = -1;
-		for (int i = 0; i < PRESENT_BO_COUNT; i++)
-			if (P.bos[i] && !P.boBusy[i]) { bo = i; break; }
-		if (bo < 0) {
-			// shouldn't happen with the FIFO free above, but be safe
-			usleep(4000);
-			continue;
-		}
-
-		// blit completed frame -> bo. IMPORTANT: FBO attachment state is
-		// PER-CONTEXT in GLES (only container objects like textures are
-		// shared) - the render thread's fbo id is meaningless here. Attach
-		// the shared SOURCE TEXTURE to this thread's own read fbo instead.
-		glBindFramebuffer(GL_READ_FRAMEBUFFER, gReadFbo);
-		glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
-		                       GL_TEXTURE_2D, srcTex, 0);
-		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, P.boFbo[bo]);
-		// Y-flip: the panel scans out top-down while GL texture origin is
-		// bottom-up - swap the source rect to land upright (the R36S panel
-		// also rotates, matching what SDL's GL swap used to do)
-		glBlitFramebuffer(0, P.height, P.width, 0,
-		                  0, 0, P.modeW, P.modeH,
-		                  GL_COLOR_BUFFER_BIT, GL_NEAREST);
-
-		// Fence: the page flip must not scan out the bo before the GPU has
-		// finished blitting into it. glFlush submits the blit; the fence
-		// inserts a dependency so KMS waits (drmModePageFlip with a
-		// in-fence would be the precise mechanism; the blob exposes
-		// EGL_KHR_fence_sync but not per-fb explicit in-fences via this
-		// path, so we wait server-side - cheap on the present thread,
-		// which exists precisely to absorb this wait).
-		glFlush();
-		if (eglCreateSyncKHR && eglClientWaitSyncKHR) {
-			EGLSyncKHR sync = eglCreateSyncKHR(gDpy, EGL_SYNC_FENCE_KHR, NULL);
-			if (sync != EGL_NO_SYNC_KHR) {
-				eglClientWaitSyncKHR(gDpy, sync, EGL_SYNC_FLUSH_COMMANDS_BIT_KHR, EGL_FOREVER_KHR);
-				eglDestroySyncKHR(gDpy, sync);
-			}
-		}
-
-		// queue the flip. NOTEs from the device bring-up:
-		//  - the 4.4 rockchip drm driver rejects DRM_MODE_PAGE_FLIP_ASYNC
-		//    with EINVAL (probe-verified t6): vblank-aligned only.
-		//  - NO EVENT flag: SDL KMSDRM polls this same fd and its
-		//    drmHandleEvent steals our flip events (the bo never came back
-		//    and the thread wedged in poll). Without events we simply
-		//    assume the bo is reusable after one vblank period, which the
-		//    2-bo rotation guarantees (the other bo is being scanned out
-		//    while we blit into this one).
-		int ret = p_drmModePageFlip(P.drmfd, gCrtcId, P.fbs[bo], 0, NULL);
-		if (ret) {
-			printf("[present] flip: %s\n", strerror(errno));
-			fflush(stdout);
-			P.boBusy[bo] = 0;
-			continue;
-		}
-		P.boBusy[bo] = 1;
-
-		// Free the bo that was flipped LAST round (FIFO): with no events
-		// (SDL steals them) we conservatively hold each bo for one extra
-		// vblank after its flip, which the 2-bo rotation can absorb.
+		// newest completed frame, and the oldest still-running one
+		int pick = -1, oldest = -1;
 		for (int i = 0; i < PRESENT_BO_COUNT; i++) {
-			if (P.boBusy[i] && i != bo) { P.boBusy[i] = 0; break; }
+			if (P.boState[i] != BO_SUBMITTED) continue;
+			if (oldest < 0 || P.boSeq[i] < P.boSeq[oldest]) oldest = i;
+			if (sync_done(P.boSync[i]) && (pick < 0 || P.boSeq[i] > P.boSeq[pick])) pick = i;
 		}
-		// Pace to the panel: ~16.7ms at 60Hz. The present thread absorbs
-		// this wait; the render thread never blocks.
-		usleep(16000);
+
+		if (pick < 0) {
+			uint64_t now = mono_us();
+			uint64_t untilRetire = (P.flipping >= 0 && P.lastFlipUs + P.periodUs > now)
+			                       ? P.lastFlipUs + P.periodUs - now : 0;
+			if (oldest >= 0) {
+				// GPU still busy: wait on the OLDEST frame (it completes
+				// first). The main thread never touches SUBMITTED bos or
+				// their fences, so this is safe without the lock. Bounded
+				// so a due retire is never delayed by more than ~4ms.
+				void *sy = P.boSync[oldest];
+				uint64_t to = 4000;
+				if (P.flipping >= 0 && untilRetire < to) to = untilRetire ? untilRetire : 500;
+				pthread_mutex_unlock(&P.mtx);
+				eglClientWaitSyncKHR(gDpy, (EGLSyncKHR)sy, 0, (EGLTimeKHR)(to * 1000ull));
+				pthread_mutex_lock(&P.mtx);
+			} else if (P.flipping >= 0) {
+				// nothing submitted: sleep until the queued flip retires
+				struct timespec dl;
+				clock_gettime(CLOCK_REALTIME, &dl);
+				uint64_t ns = (uint64_t)dl.tv_nsec + (untilRetire ? untilRetire : 500) * 1000ull;
+				dl.tv_sec += ns / 1000000000ull; dl.tv_nsec = ns % 1000000000ull;
+				pthread_cond_timedwait(&P.cv, &P.mtx, &dl);
+			} else {
+				pthread_cond_wait(&P.cv, &P.mtx);
+			}
+			continue;
+		}
+
+		// Take `pick`; older completed frames were superseded before they
+		// could be shown (frames are completed in submit order, so every
+		// older SUBMITTED one is done too).
+		for (int i = 0; i < PRESENT_BO_COUNT; i++) {
+			if (i == pick || P.boState[i] != BO_SUBMITTED || P.boSeq[i] > P.boSeq[pick]) continue;
+			if (P.boSync[i]) eglDestroySyncKHR(gDpy, (EGLSyncKHR)P.boSync[i]);
+			P.boSync[i] = NULL;
+			P.boState[i] = BO_FREE;
+			P.nDrop++;
+		}
+		if (P.boSync[pick]) eglDestroySyncKHR(gDpy, (EGLSyncKHR)P.boSync[pick]);
+		P.boSync[pick] = NULL;
+		P.boState[pick] = BO_FLIPPING;
+		rLat += mono_us() - P.boSubmitUs[pick];
+		pthread_cond_broadcast(&P.freeCv);
+
+		// One flip per refresh: the 4.4 rockchip driver rejects a second
+		// flip while one is pending (and DRM_MODE_PAGE_FLIP_ASYNC: EINVAL).
+		uint64_t now = mono_us();
+		if (P.flipping >= 0 && now < P.lastFlipUs + P.periodUs) {
+			uint64_t d = P.lastFlipUs + P.periodUs - now;
+			pthread_mutex_unlock(&P.mtx);
+			usleep((useconds_t)d);
+			pthread_mutex_lock(&P.mtx);
+		}
+		retire_if_due_locked(mono_us());
+
+		// queue the flip (vblank-aligned; NO event flag - SDL KMSDRM polls the
+		// same fd and its drmHandleEvent would steal the event)
+		pthread_mutex_unlock(&P.mtx);
+		uint64_t tFlip = mono_us();
+		int ret = p_drmModePageFlip(P.drmfd, gCrtcId, P.fbs[pick], 0, NULL);
+		pthread_mutex_lock(&P.mtx);
+		if (ret) {
+			P.nFlipErr++;
+			if (P.nFlipErr <= 5 || (P.nFlipErr % 200) == 0) {
+				printf("[present] flip: %s (err #%u)\n", strerror(errno), P.nFlipErr);
+				fflush(stdout);
+			}
+			P.boState[pick] = BO_FREE;
+			pthread_cond_broadcast(&P.freeCv);
+			continue;
+		}
+		P.nFlip++;
+		P.flipping = pick;
+		P.lastFlipUs = tFlip;
+
+		// ~3s stats line: frames actually shown vs rendered (the HUD fps
+		// counts rendered frames, not displayed ones)
+		uint64_t t = mono_us();
+		if (t - lastReport >= 3000000ull) {
+			uint32_t sub = P.nSubmit, drop = P.nDrop;
+			uint64_t bp = P.backpressureUs, gw = P.gpuWaitUs;
+			double secs = (double)(t - lastReport) / 1e6;
+			uint32_t df = P.nFlip - rFlip, ds = sub - rSub, dd = drop - rDrop;
+			printf("[present] %.1fs: shown=%.1f/s submitted=%.1f/s dropped=%u (%.0f%%) "
+			       "lat=%.2fms gpuwait=%.2fms/s mainblock=%.2fms/s fliperr=%u\n",
+			       secs, df / secs, ds / secs, dd, ds ? 100.0 * dd / ds : 0.0,
+			       df ? (rLat / 1000.0) / df : 0.0,
+			       (double)(gw - rGw) / 1000.0 / secs,
+			       (double)(bp - rBp) / 1000.0 / secs, P.nFlipErr);
+			fflush(stdout);
+			lastReport = t; rFlip = P.nFlip; rSub = sub; rDrop = drop;
+			rBp = bp; rGw = gw; rLat = 0;
+		}
 	}
+	pthread_mutex_unlock(&P.mtx);
 	return NULL;
 }
 
@@ -522,18 +662,94 @@ Present_Start(void)
 	pthread_create(&P.thread, NULL, present_thread, NULL);
 }
 
-void
-Present_Submit(uint32_t fbo, uint32_t tex)
+// Pick a free bo for the main thread to blit into, with P.mtx held; -1 if
+// none. SUBMITTED bos are never taken back here: their fences belong to the
+// present thread (which may be waiting on them unlocked).
+static int
+take_bo_locked(void)
 {
+	for (int i = 0; i < PRESENT_BO_COUNT; i++)
+		if (P.boState[i] == BO_FREE) { P.boState[i] = BO_MAIN; return i; }
+	return -1;
+}
+
+void
+Present_Submit(uint32_t fbo, uint32_t tex, uint32_t nextTex)
+{
+	(void)tex; (void)nextTex; // only the main thread touches camera textures now
 	if (!P.inited) return;
+
 	pthread_mutex_lock(&P.mtx);
-	if (P.pendingCount < 4) {
-		P.pending[P.pendingCount].fbo = fbo;
-		P.pending[P.pendingCount].tex = tex;
-		P.pendingCount++;
+	P.nSubmit++;
+	int bo = take_bo_locked();
+	if (bo < 0) {
+		// All bos busy (scanned / latching / waiting to be shown). Wait,
+		// bounded, so a wedged present thread can never hang the game: on
+		// timeout the frame is simply not shown.
+		uint64_t t0 = mono_us();
+		struct timespec dl;
+		clock_gettime(CLOCK_REALTIME, &dl);
+		dl.tv_nsec += 100 * 1000000L;
+		if (dl.tv_nsec >= 1000000000L) { dl.tv_sec++; dl.tv_nsec -= 1000000000L; }
+		while (bo < 0 && !P.quit) {
+			if (pthread_cond_timedwait(&P.freeCv, &P.mtx, &dl) != 0) break;
+			bo = take_bo_locked();
+		}
+		P.backpressureUs += mono_us() - t0;
+		if (bo < 0) { P.nDrop++; pthread_mutex_unlock(&P.mtx); return; }
 	}
+	pthread_mutex_unlock(&P.mtx);
+
+	// Blit the just-rendered camera frame into the scanout bo, on this
+	// (main) context: the copy is queued directly behind this frame's draws.
+	// Y-flip: GL texture origin is bottom-up, the panel scans top-down.
+	// Blits ignore blend/depth/masks but honour the scissor test.
+	GLboolean scissor = glIsEnabled(GL_SCISSOR_TEST);
+	if (scissor) glDisable(GL_SCISSOR_TEST);
+	glBindFramebuffer(GL_READ_FRAMEBUFFER, fbo);
+	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, P.boFbo[bo]);
+	glBlitFramebuffer(0, P.height, P.width, 0,
+	                  0, 0, P.modeW, P.modeH,
+	                  GL_COLOR_BUFFER_BIT, GL_NEAREST);
+	if (scissor) glEnable(GL_SCISSOR_TEST);
+	// (librw rebinds its render target after this callback returns)
+
+	// Two fences at the same point (render + blit, same context, in order):
+	// one handed to the present thread with the bo, one kept here for the
+	// GPU throttle below. Flush so the GPU starts now.
+	int useFence = eglCreateSyncKHR && eglDestroySyncKHR && eglClientWaitSyncKHR;
+	void *sync = NULL, *thr = NULL;
+	if (useFence) {
+		EGLSyncKHR s1 = eglCreateSyncKHR(gDpy, EGL_SYNC_FENCE_KHR, NULL);
+		EGLSyncKHR s2 = eglCreateSyncKHR(gDpy, EGL_SYNC_FENCE_KHR, NULL);
+		if (s1 != EGL_NO_SYNC_KHR) sync = (void *)s1;
+		if (s2 != EGL_NO_SYNC_KHR) thr = (void *)s2;
+	}
+	if (sync) glFlush();
+	else glFinish(); // no usable fence: block until the frame is really done
+
+	pthread_mutex_lock(&P.mtx);
+	P.boSync[bo] = sync;
+	P.boSeq[bo] = ++P.seq;
+	P.boSubmitUs[bo] = mono_us();
+	P.boState[bo] = BO_SUBMITTED;
 	pthread_cond_signal(&P.cv);
 	pthread_mutex_unlock(&P.mtx);
+
+	// GPU back-pressure: wait until the frame submitted MAX_FRAMES_IN_FLIGHT
+	// ago has finished on the GPU, so the CPU stays at most that far ahead
+	// (unbounded, the GPU queue grew to 100-265ms of latency).
+	int slot = P.inflightHead;
+	void *older = P.inflightSync[slot];
+	P.inflightSync[slot] = thr;
+	P.inflightHead = (slot + 1) % MAX_FRAMES_IN_FLIGHT;
+	if (older) {
+		uint64_t g0 = mono_us();
+		eglClientWaitSyncKHR(gDpy, (EGLSyncKHR)older, EGL_SYNC_FLUSH_COMMANDS_BIT_KHR,
+		                     (EGLTimeKHR)500000000ull); // 500ms cap
+		eglDestroySyncKHR(gDpy, (EGLSyncKHR)older);
+		P.gpuWaitUs += mono_us() - g0;
+	}
 }
 
 void
@@ -546,8 +762,13 @@ Present_Shutdown(void)
 	pthread_mutex_lock(&P.mtx);
 	P.quit = 1;
 	pthread_cond_signal(&P.cv);
+	pthread_cond_broadcast(&P.freeCv); // release a Submit() blocked on a texture
 	pthread_mutex_unlock(&P.mtx);
 	pthread_join(P.thread, NULL);
+	for (int i = 0; i < PRESENT_BO_COUNT; i++)
+		if (P.boSync[i]) { eglDestroySyncKHR(gDpy, (EGLSyncKHR)P.boSync[i]); P.boSync[i] = NULL; }
+	for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+		if (P.inflightSync[i]) { eglDestroySyncKHR(gDpy, (EGLSyncKHR)P.inflightSync[i]); P.inflightSync[i] = NULL; }
 	for (int i = 0; i < PRESENT_BO_COUNT; i++) {
 		if (P.boFbo[i]) glDeleteFramebuffers(1, &P.boFbo[i]);
 		if (P.boTex[i]) glDeleteTextures(1, &P.boTex[i]);

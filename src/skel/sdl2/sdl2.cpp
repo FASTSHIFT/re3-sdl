@@ -162,8 +162,9 @@ static int sPresentW = 0, sPresentH = 0;
 static int sKmsPresentActive = 0;
 #endif
 static void
-triplebufSubmitPC(uint32_t fbo, uint32_t tex)
+triplebufSubmitPC(uint32_t fbo, uint32_t tex, uint32_t nextTex)
 {
+	(void)nextTex; // PC path presents synchronously on this thread
 	// PC fallback (docs/09 §5 step 2): blit into the window backbuffer and
 	// swap, on the main thread (SDL requires it). IMPORTANT: present the
 	// PREVIOUS frame. The just-rendered FBO is still being drawn by the GPU
