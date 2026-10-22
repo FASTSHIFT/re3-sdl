@@ -591,10 +591,12 @@ CFont::PrintChar(float x, float y, wchar c)
 	float yoff = c / 16;
 #ifdef MORE_LANGUAGES
 	// N1 guard: at replay time the style test must use the segment snapshot
-	// (RenderState), not the live Details - a later submission may already
-	// have switched it, sending CJK glyphs down the Latin path (segment
-	// vanishes) or Latin digits down the CJK path (garbled UVs).
-	if (IsJapanese() && (Details.style == FONT_JAPANESE || RenderState.style == FONT_JAPANESE)) {
+	// (RenderState) ONLY, never the live Details - a later submission may
+	// already have switched it. Reading Details here sent stock-font HUD
+	// glyphs down the CJK grid whenever a CJK submit triggered the flush:
+	// the wanted stars left in the buffer after the 1KB overflow flush got
+	// u>1 UVs and vanished/garbled while a zone/vehicle name was shown.
+	if (IsJapanese() && RenderState.style == FONT_JAPANESE) {
 		w = CJK_CELLW;
 		xoff = (float)(c % CJK_COLS);
 		yoff = c / CJK_COLS;
@@ -645,7 +647,7 @@ CFont::PrintChar(float x, float y, wchar c)
 				xoff / 16.0f, (yoff + 1.0f) / 12.8f - 0.009f,
 				(xoff + 1.0f) / 16.0f - 0.001f, (yoff + 1.0f) / 12.8f - 0.0021f + 0.01f);
 #ifdef MORE_LANGUAGES
-	}else if (IsJapanese() && (Details.style == FONT_JAPANESE || RenderState.style == FONT_JAPANESE)) {
+	}else if (IsJapanese() && RenderState.style == FONT_JAPANESE) {
 		// CJK path (REVC_CHINESE): atlas cell = c, grid CJK_COLS wide.
 		// Geometry matches tools/l10n/gen_cn_font.py (see Font.h macros).
 		// All geometry reads the RenderState snapshot (docs/05 A1/N1): the
@@ -884,9 +886,12 @@ CFont::RenderFontBuffer()
 #ifdef MORE_LANGUAGES
 		if (RenderState.bFontHalfTexture)
 			c = FindNewCharacter(c);
-		else if (IsJapaneseFont())
+		else if (IsJapanese() && RenderState.style == FONT_JAPANESE)
 			; // CJK: glyphs are atlas cell indices (>=95); must NOT be
 			  // truncated to '\0' like the stock Latin path does below.
+			  // Segment snapshot, not live Details (IsJapaneseFont()):
+			  // a CJK segment flushed by a later stock-font submit lost
+			  // every glyph with cell index > 155.
 		else if (c > 155)
 			c = '\0';
 #else

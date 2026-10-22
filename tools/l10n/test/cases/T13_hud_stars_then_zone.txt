@@ -1,0 +1,33 @@
+# T13 HUD order: stock-font money/health/wanted stars, then a CJK zone name
+# in the same frame (N1 inverse, the real HUD case - T03 uses FONT_LOCALE for
+# both segments so it never mixes stock and CJK styles).
+# The stars overflow the 1KB font buffer, so the earlier glyphs are flushed
+# under Details.style=STANDARD and the rest (left-most stars) are flushed by
+# the zone name's style switch, while the live Details already says
+# FONT_JAPANESE. Replay must use the segment snapshot (RenderState.style):
+# with the live style the leftover stars got CJK-grid UVs (u>1) and vanished
+# or turned into other glyphs ("left stars disappear when entering a zone").
+frame
+style 2
+scale 0.6 1.0
+shadow 2
+color 89 115 150
+print 300 40 $00001234
+color 255 150 225
+print 300 60 100
+print 260 60 {
+style 1
+color 27 89 130
+print 460 85 >
+print 437 85 >
+print 414 85 >
+print 391 85 >
+print 368 85 >
+print 345 85 >
+locale_style 0
+scale 1.0 1.0
+color 45 155 90
+print 300 300 \u4e2d\u6587\u6807\u7b7e
+grab T13
+assert uv_in_atlas T13
+assert quad_count T13 46
