@@ -1,0 +1,78 @@
+{
+  "converter": {
+    "dir_sha256": "81efc54b405c3306debb93fc2811bef4a5db3c96318b32ba1b9c8f4862a46e7f",
+    "entry_sha256": [
+      "324f7ca6a1b4c973b92f087810ae30925fa82b57e0b117f62c5339ce0cd3dbbf",
+      "0fa5da8dea89b1de56f140d6f6e63842e7c9c6ca1907c573f7de7f270f39dc40",
+      "114ed227960d61e5df91068e9224c65655bc222478f2aadacece8c33b13a69b2",
+      "34b59ec5dd06ca0e38498f1e6efcafae191bdee49ce4e640fa1448f0c0a084f0",
+      "ed9f46948bf2bce4089442ea483cf239bdb4b45eac8f8cb9206ef536ef371ad4",
+      "a31eb49ee43eb31261196bbab2626aaeeb27e1d9e39e8c1712741f55f511ee66",
+      "b6260ad19cfd042217812e33ae5a62e020015c75b378527d024d89e0b88ead63",
+      "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "7857c7064277a9b516e19675ffcb61c80b306414b9e2f675ea155d668e298e68"
+    ],
+    "img_bytes": 38912,
+    "img_sha256": "a5e3f45bb0bc50b26f2eaa346d7d004ebb503b4d615a2c5d75792c2c8a6d8065"
+  },
+  "description": "sha256 of outputs of the UNFIXED img tools on a fixed archive (fake txd_compress: FAKEASTC marker + input)",
+  "names": [
+    "ped1.txd",
+    "IGmike.txd",
+    "pga.dff",
+    "LODhaiti.txd",
+    "world.col",
+    "pga.dff",
+    "walk.ifp",
+    "empty.txd",
+    "other.txd"
+  ],
+  "patch_igmike_fit_world_shrink": {
+    "dir_sha256": "039eb773b32785d9ad13f9f5085fc9d0953da34ecab3828645489bc3e120292d",
+    "entry_sha256": [
+      "0852ffac7e081b53d9881a5fb4c3d9fa86a14defe0899f35cff7679d064eda93",
+      "da8537b1c8b6b76b3e293cc162d1c1d0238674e9884bb20ef7b202c95559a75c",
+      "114ed227960d61e5df91068e9224c65655bc222478f2aadacece8c33b13a69b2",
+      "8956ad1c57cb69e81314def74cdeb37a05ea1960dfcb4ed2eab858ae72a76401",
+      "d41a37665290e8b7de5a53abbafccb06cb06f54142ceb8402f8121887c2ba862",
+      "a31eb49ee43eb31261196bbab2626aaeeb27e1d9e39e8c1712741f55f511ee66",
+      "b6260ad19cfd042217812e33ae5a62e020015c75b378527d024d89e0b88ead63",
+      "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "cf3e8e66f5e533b3e38c05a32466a6c4cb64e6689d5e5850ef35374098beaac4"
+    ],
+    "img_bytes": 30720,
+    "img_sha256": "a321fe2b710569d0ee3e0c36d053e2535391859f5217c43f794b36db1fb669fb"
+  },
+  "rebuild_igmike_grow_world_shrink": {
+    "dir_sha256": "c09b8d8dec22dd6abfb99645a1c997df6176991cb5cc961085075d962074e61f",
+    "entry_sha256": [
+      "0852ffac7e081b53d9881a5fb4c3d9fa86a14defe0899f35cff7679d064eda93",
+      "b08c6861f282b54282c691c362a379505f9292e9dd1e5fce75f2f0d708ff9171",
+      "114ed227960d61e5df91068e9224c65655bc222478f2aadacece8c33b13a69b2",
+      "8956ad1c57cb69e81314def74cdeb37a05ea1960dfcb4ed2eab858ae72a76401",
+      "d41a37665290e8b7de5a53abbafccb06cb06f54142ceb8402f8121887c2ba862",
+      "a31eb49ee43eb31261196bbab2626aaeeb27e1d9e39e8c1712741f55f511ee66",
+      "b6260ad19cfd042217812e33ae5a62e020015c75b378527d024d89e0b88ead63",
+      "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "cf3e8e66f5e533b3e38c05a32466a6c4cb64e6689d5e5850ef35374098beaac4"
+    ],
+    "img_bytes": 34816,
+    "img_sha256": "644bac37b4200685655318b0a2352ca1d037e9e8851f579fbf52c65af5130a1d"
+  },
+  "source": {
+    "dir_sha256": "039eb773b32785d9ad13f9f5085fc9d0953da34ecab3828645489bc3e120292d",
+    "entry_sha256": [
+      "0852ffac7e081b53d9881a5fb4c3d9fa86a14defe0899f35cff7679d064eda93",
+      "2e6a17a9594a0fd0dd99000a4fd4af228d84b14fbb3a6e6460fc1db6e3b4168f",
+      "114ed227960d61e5df91068e9224c65655bc222478f2aadacece8c33b13a69b2",
+      "8956ad1c57cb69e81314def74cdeb37a05ea1960dfcb4ed2eab858ae72a76401",
+      "ed9f46948bf2bce4089442ea483cf239bdb4b45eac8f8cb9206ef536ef371ad4",
+      "a31eb49ee43eb31261196bbab2626aaeeb27e1d9e39e8c1712741f55f511ee66",
+      "b6260ad19cfd042217812e33ae5a62e020015c75b378527d024d89e0b88ead63",
+      "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "cf3e8e66f5e533b3e38c05a32466a6c4cb64e6689d5e5850ef35374098beaac4"
+    ],
+    "img_bytes": 30720,
+    "img_sha256": "e6338a669aa4741a181988df5b15dfc070ea03e549b0b4b8f7c062f780ff9d89"
+  }
+}
