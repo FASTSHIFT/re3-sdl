@@ -29,6 +29,28 @@
 uint32 bulletInfoInUse;
 #endif
 
+// Release a bullet exactly once. The counter above gates CBulletInfo::Update, so
+// it must always equal the number of bullets with m_bInUse set. The old code
+// decremented it more than once for one bullet (a ped hit decremented in the
+// damage branch and again in the nastyGame branch; an expired bullet that then
+// hit something was released twice; leaving the map boundary never decremented).
+// Once the counter was off, adding a bullet could bring it to 0 while the bullet
+// was alive, Update returned early and the bullet froze mid-air until the next
+// shot - sniper shots that were aimed correctly never hit anything.
+// (a macro, not a function: m_bInUse is private and only CBulletInfo members may touch it)
+#ifdef SQUEEZE_PERFORMANCE
+#define ReleaseBullet(bullet) \
+	do { \
+		if ((bullet)->m_bInUse) { \
+			(bullet)->m_bInUse = false; \
+			if (bulletInfoInUse != 0) \
+				bulletInfoInUse--; \
+		} \
+	} while (0)
+#else
+#define ReleaseBullet(bullet) do { (bullet)->m_bInUse = false; } while (0)
+#endif
+
 #define BULLET_LIFETIME (1000)
 #define NUM_PED_BLOOD_PARTICLES (8)
 #define BLOOD_PARTICLE_OFFSET (CVector(0.0f, 0.0f, 0.0f))
@@ -94,6 +116,7 @@ bool CBulletInfo::AddBullet(CEntity* pSource, eWeaponType type, CVector vecPosit
 void CBulletInfo::Update(void)
 {
 #ifdef SQUEEZE_PERFORMANCE
+	bPlayerSniperBullet = false;
 	if (bulletInfoInUse == 0)
 		return;
 #endif
@@ -105,16 +128,13 @@ void CBulletInfo::Update(void)
 		if (!pBullet->m_bInUse)
 			continue;
 		if (CTimer::GetTimeInMilliseconds() > pBullet->m_fTimer) {
-			pBullet->m_bInUse = false;
-#ifdef SQUEEZE_PERFORMANCE
-			bulletInfoInUse--;
-#endif
+			ReleaseBullet(pBullet);
 		}
 		CVector vecOldPos = pBullet->m_vecPosition;
 		CVector vecNewPos = pBullet->m_vecPosition + pBullet->m_vecSpeed * CTimer::GetTimeStep() * 0.5f;
 
 		if ( vecNewPos.x <= BULLET_BOUNDARY_MIN_X || vecNewPos.x >= BULLET_BOUNDARY_MAX_X || vecNewPos.y <= BULLET_BOUNDARY_MIN_Y || vecNewPos.y >= BULLET_BOUNDARY_MAX_Y ) {
-			pBullet->m_bInUse = false;
+			ReleaseBullet(pBullet);
 			continue;
 		}
 		CWorld::bIncludeDeadPeds = true;
@@ -136,10 +156,7 @@ void CBulletInfo::Update(void)
 					}
 					pPed->InflictDamage(pBullet->m_pSource, pBullet->m_eWeaponType, pBullet->m_nDamage, (ePedPieceTypes)point.pieceB, pPed->GetLocalDirection(pPed->GetPosition() - point.point));
 					CEventList::RegisterEvent(pPed->m_nPedType == PEDTYPE_COP ? EVENT_SHOOT_COP : EVENT_SHOOT_PED, EVENT_ENTITY_PED, pPed, (CPed*)pBullet->m_pSource, 1000);
-					pBullet->m_bInUse = false;
-#ifdef SQUEEZE_PERFORMANCE
-					bulletInfoInUse--;
-#endif
+					ReleaseBullet(pBullet);
 					vecNewPos = point.point;
 				}
 				if (CGame::nastyGame) {
@@ -161,10 +178,7 @@ void CBulletInfo::Update(void)
 							pAnim->flags &= ~ASSOC_FADEOUTWHENDONE;
 						}
 					}
-					pBullet->m_bInUse = false;
-#ifdef SQUEEZE_PERFORMANCE
-					bulletInfoInUse--;
-#endif
+					ReleaseBullet(pBullet);
 					vecNewPos = point.point;
 				}
 			}
@@ -189,10 +203,7 @@ void CBulletInfo::Update(void)
 					}
 				}
 #ifdef FIX_BUGS
-				pBullet->m_bInUse = false;
-#ifdef SQUEEZE_PERFORMANCE
-				bulletInfoInUse--;
-#endif
+				ReleaseBullet(pBullet);
 				vecNewPos = point.point;
 #endif
 			} else {
@@ -220,10 +231,7 @@ void CBulletInfo::Update(void)
 					}
 				}
 #ifdef FIX_BUGS
-				pBullet->m_bInUse = false;
-#ifdef SQUEEZE_PERFORMANCE
-				bulletInfoInUse--;
-#endif
+				ReleaseBullet(pBullet);
 				vecNewPos = point.point;
 #endif
 			}
