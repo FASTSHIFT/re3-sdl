@@ -1423,6 +1423,34 @@ cursorCB(double xpos, double ypos) {
 	FrontEndMenuManager.m_nMouseTempPosY = ypos; // * (RsGlobal.maximumHeight / winh);
 }
 
+// Desktop gameplay mouse look: the stock SDL2 path derives the delta from the
+// absolute cursor position and (outside RW_GL3) re-centres it every frame. With
+// RW_GL3 nothing re-centres it, so the cursor ran into the window edge (delta 0)
+// and then left the window (UpdateMouse stopped). Gameplay now uses SDL relative
+// mouse mode: the cursor is captured and SDL reports raw motion deltas, which
+// are accumulated here and consumed once per frame by CPad::UpdateMouse.
+#ifndef REVC_R36S
+static int sMouseRelX = 0, sMouseRelY = 0;
+void
+psMouseGetRelative(int *dx, int *dy)
+{
+	*dx = sMouseRelX;
+	*dy = sMouseRelY;
+	sMouseRelX = sMouseRelY = 0;
+}
+// Relative mode only while playing with the window focused; menus use the
+// absolute cursor. Returns the current mode.
+bool
+psMouseSetRelative(bool on)
+{
+	if ((SDL_GetRelativeMouseMode() == SDL_TRUE) != on) {
+		if (SDL_SetRelativeMouseMode(on ? SDL_TRUE : SDL_FALSE) != 0)
+			return false;
+		sMouseRelX = sMouseRelY = 0;
+	}
+	return SDL_GetRelativeMouseMode() == SDL_TRUE;
+}
+#endif
 void
 cursorEnterCB(int entered) {
 	PSGLOBAL(cursorIsInWindow) = !!entered;
@@ -1441,19 +1469,27 @@ windowIconifyCB(int iconified) {
 void inputEventHandler() {
 	SDL_Event event;
 
-#ifdef REVC_R36S
-	// Drain the whole event queue each frame (P9)
+	// Drain the whole event queue each frame (P9). Handling one event per frame
+	// let the queue grow without bound as soon as the mouse produced more than one
+	// event per frame (relative mouse mode: hundreds per second), so camera
+	// movement lagged further and further behind the hand.
     while (SDL_PollEvent(&event)) {
-#else
-    if (SDL_PollEvent(&event)) {
-#endif
 		switch (event.type) {
 		case SDL_KEYDOWN:	/* fall-through */
 		case SDL_KEYUP:
 			keypressCB(event.key.keysym.sym, event.type, 0);
 			break;
 
-		case SDL_MOUSEMOTION: cursorCB(event.motion.x, event.motion.y); break;
+		case SDL_MOUSEMOTION:
+#ifndef REVC_R36S
+			if (SDL_GetRelativeMouseMode() == SDL_TRUE) {
+				sMouseRelX += event.motion.xrel;
+				sMouseRelY += event.motion.yrel;
+				break;
+			}
+#endif
+			cursorCB(event.motion.x, event.motion.y);
+			break;
 		case SDL_MOUSEWHEEL: scrollCB(event.wheel.x, event.wheel.y); break;
 
 		// note that SDL_CONTROLLERDEVICEADDED/REMOVED exists, but it did not work for me

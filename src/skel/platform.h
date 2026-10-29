@@ -25,6 +25,11 @@ extern RwBool psCameraBeginUpdate(RwCamera *camera);
 extern RwImage *psGrabScreen(RwCamera *camera);
 
 extern void psMouseSetPos(RwV2d *pos);
+#if defined(LIBRW_SDL2) && !defined(REVC_R36S)
+// SDL2 desktop gameplay mouse look (relative mode); see sdl2.cpp
+extern void psMouseGetRelative(int *dx, int *dy);
+extern bool psMouseSetRelative(bool on);
+#endif
 
 extern RwBool psSelectDevice();
 

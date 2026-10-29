@@ -927,6 +927,48 @@ void CPad::UpdateMouse()
 		}
 	}
 #else
+#if defined(LIBRW_SDL2) && !defined(REVC_R36S)
+	// Gameplay: captured relative mouse (no cursor escaping the window); the
+	// menu keeps the absolute cursor.
+	bool relMouse = psMouseSetRelative(IsForegroundApp() && !FrontEndMenuManager.m_bMenuActive);
+	if ( relMouse )
+	{
+		int dx, dy;
+		psMouseGetRelative(&dx, &dy);
+		int xpos, ypos;
+		int mouseState = SDL_GetMouseState(&xpos, &ypos);
+
+		int32 signX = 1;
+		int32 signy = 1;
+		if (MousePointerStateHelper.bInvertVertically)
+			signy = -1;
+		if (MousePointerStateHelper.bInvertHorizontally)
+			signX = -1;
+
+		PCTempMouseControllerState.Clear();
+		PCTempMouseControllerState.x = (float)(signX * dx);
+		PCTempMouseControllerState.y = (float)(signy * dy);
+		PCTempMouseControllerState.LMB = !!(mouseState & SDL_BUTTON(1));
+		PCTempMouseControllerState.RMB = !!(mouseState & SDL_BUTTON(3));
+		PCTempMouseControllerState.MMB = !!(mouseState & SDL_BUTTON(2));
+		PCTempMouseControllerState.MXB1 = !!(mouseState & SDL_BUTTON(4));
+		PCTempMouseControllerState.MXB2 = !!(mouseState & SDL_BUTTON(5));
+
+		if (PSGLOBAL(mouseWheel) > 0)
+			PCTempMouseControllerState.WHEELUP = 1;
+		else if (PSGLOBAL(mouseWheel) < 0)
+			PCTempMouseControllerState.WHEELDN = 1;
+
+		// leaving relative mode must not produce a jump from a stale position
+		PSGLOBAL(lastMousePos.x) = xpos;
+		PSGLOBAL(lastMousePos.y) = ypos;
+		PSGLOBAL(mouseWheel) = 0.0f;
+
+		OldMouseControllerState = NewMouseControllerState;
+		NewMouseControllerState = PCTempMouseControllerState;
+		return;
+	}
+#endif
 	if ( IsForegroundApp() && PSGLOBAL(cursorIsInWindow) )
 	{
 #ifdef LIBRW_SDL2
