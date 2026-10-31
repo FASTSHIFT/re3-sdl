@@ -971,6 +971,7 @@ RwBool _psSetVideoMode(RwInt32 subSystem, RwInt32 videoMode)
 {
 	RwInitialised = FALSE;
 
+	Present_Shutdown_Skel();   // the chain is rebuilt by psSelectDevice
 	RsEventHandler(rsRWTERMINATE, nil);
 
 	GcurSel = subSystem;
@@ -1525,6 +1526,10 @@ main(int argc, char *argv[])
 	RwV2d pos;
 	RwInt32 i;
 
+	// The launcher pipes stdout through tee (full buffering): after a hang the
+	// last KBs of log - exactly the ones that matter - were lost. Line-buffer it.
+	setvbuf(stdout, NULL, _IOLBF, 0);
+
 #ifdef USE_CUSTOM_ALLOCATOR
 	InitMemoryMgr();
 #endif
@@ -2076,6 +2081,10 @@ main(int argc, char *argv[])
 		CGame::ShutDown();
 
 	DMAudio.Terminate();
+
+	// Stop the KMS present chain while the GL context is still current and
+	// before SDL/librw tear the window down (it was never stopped before).
+	Present_Shutdown_Skel();
 
 	_psFreeVideoModeList();
 

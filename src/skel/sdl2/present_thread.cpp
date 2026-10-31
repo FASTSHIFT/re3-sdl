@@ -119,6 +119,7 @@ static struct {
 	// bo pool (device path)
 #ifdef PRESENT_USE_KMS
 	int drmfd;
+	int ownFd;                     // drmfd was opened by us (SDL's fd must never be closed here)
 	struct gbm_device *gbm;
 	struct gbm_bo *bos[PRESENT_BO_COUNT];
 	uint32_t fbs[PRESENT_BO_COUNT];
@@ -189,6 +190,8 @@ static void (*p_drmModeFreeEncoder)(drmModeEncoder*);
 static drmModeCrtc *(*p_drmModeGetCrtc)(int, uint32_t);
 static void (*p_drmModeFreeCrtc)(drmModeCrtc*);
 static int (*p_drmSetMaster)(int);
+static int (*p_drmDropMaster)(int);
+static int (*p_drmModeSetCrtc)(int, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t*, int, drmModeModeInfo*);
 // gbm (from the blob's own libgbm)
 static struct gbm_bo *(*p_gbm_bo_create)(struct gbm_device*, uint32_t, uint32_t, uint32_t, uint32_t);
 static void (*p_gbm_bo_destroy)(struct gbm_bo*);
@@ -215,6 +218,8 @@ load_drm_gbm_syms(void)
 	LOAD(h_drm, p_drmModeGetCrtc,      "drmModeGetCrtc");
 	LOAD(h_drm, p_drmModeFreeCrtc,     "drmModeFreeCrtc");
 	LOAD(h_drm, p_drmSetMaster,        "drmSetMaster");
+	LOAD(h_drm, p_drmDropMaster,       "drmDropMaster");
+	LOAD(h_drm, p_drmModeSetCrtc,      "drmModeSetCrtc");
 	LOAD(h_gbm, p_gbm_bo_create,       "gbm_bo_create");
 	LOAD(h_gbm, p_gbm_bo_destroy,      "gbm_bo_destroy");
 	LOAD(h_gbm, p_gbm_bo_get_stride,   "gbm_bo_get_stride");
@@ -249,6 +254,7 @@ static EGLDisplay (*p_eglGetDisplay)(void *);
 static EGLBoolean (*p_eglInitialize)(EGLDisplay, EGLint *, EGLint *);
 static EGLContext (*p_eglCreateContext)(EGLDisplay, EGLConfig, EGLContext, const EGLint *);
 static EGLBoolean (*p_eglMakeCurrent)(EGLDisplay, EGLSurface, EGLSurface, EGLContext);
+static EGLBoolean (*p_eglDestroyContext)(EGLDisplay, EGLContext);
 static void *(*p_eglGetProcAddress)(const char *);
 static EGLBoolean (*p_eglBindAPI)(EGLenum);
 
@@ -265,6 +271,8 @@ load_egl_syms(void)
 	LOADE(p_eglMakeCurrent,      "eglMakeCurrent");
 	LOADE(p_eglGetProcAddress,   "eglGetProcAddress");
 	LOADE(p_eglBindAPI,          "eglBindAPI");
+	// optional: only needed to tear the present context down at exit
+	p_eglDestroyContext = (__typeof__(p_eglDestroyContext))dlsym(gEglHandle, "eglDestroyContext");
 #undef LOADE
 	return 0;
 }
@@ -342,6 +350,7 @@ Present_Init(int w, int h)
 	// (that wipe is why "no gbm device" ever happened). Only reset the
 	// fields this function owns.
 	P.inited = 0;
+	P.quit = 0;                    // re-init after a Present_Shutdown (video mode change)
 	P.width = w; P.height = h;
 
 	if (load_drm_gbm_syms() < 0) { printf("[present] dlopen drm/gbm failed\n"); return -1; }
@@ -354,12 +363,13 @@ Present_Init(int w, int h)
 	// still fall back to swap (the chain reports it).
 	P.drmfd = open("/dev/dri/card0", O_RDWR | O_CLOEXEC);
 	if (P.drmfd < 0) { printf("[present] open card0: %s\n", strerror(errno)); return -1; }
+	P.ownFd = 1;
 	int master_rc = p_drmSetMaster(P.drmfd);
 	printf("[present] card0 fd=%d drmSetMaster rc=%d\n", P.drmfd, master_rc);
 	if (master_rc != 0 && P.hasSdlfd && P.sdlfd >= 0) {
 		// couldn't take master; prefer SDL's fd if it is a working one
 		drmModeRes *probe = p_drmModeGetResources(P.sdlfd);
-		if (probe) { p_drmModeFreeResources(probe); close(P.drmfd); P.drmfd = P.sdlfd;
+		if (probe) { p_drmModeFreeResources(probe); close(P.drmfd); P.drmfd = P.sdlfd; P.ownFd = 0;
 			printf("[present] using SDL fd %d instead\n", P.sdlfd); }
 	}
 
@@ -651,6 +661,8 @@ present_thread(void *arg)
 		}
 	}
 	pthread_mutex_unlock(&P.mtx);
+	// a context left current on a dying thread confuses the blob's EGL teardown
+	p_eglMakeCurrent(gDpy, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
 	return NULL;
 }
 
@@ -759,26 +771,76 @@ void
 Present_Shutdown(void)
 {
 	if (!P.inited) return;
+	P.inited = 0;          // idempotent; Present_Submit() ignores calls from now on
+	printf("[present] shutdown: stopping flip thread\n"); fflush(stdout);
+
+	// 1. Stop the flip thread FIRST. It used to be left running while SDL tore
+	//    KMS down (this function was never called), flipping bos that were
+	//    about to vanish.
 	pthread_mutex_lock(&P.mtx);
 	P.quit = 1;
 	pthread_cond_signal(&P.cv);
-	pthread_cond_broadcast(&P.freeCv); // release a Submit() blocked on a texture
+	pthread_cond_broadcast(&P.freeCv); // release a Submit() blocked on a bo
 	pthread_mutex_unlock(&P.mtx);
 	pthread_join(P.thread, NULL);
+
+	// 2. The GPU must be done writing into the scanout bos (main-context
+	//    blits) before they are unmapped or freed; the display must also have
+	//    latched the last queued flip before we change the CRTC.
+	glFinish();
 	for (int i = 0; i < PRESENT_BO_COUNT; i++)
 		if (P.boSync[i]) { eglDestroySyncKHR(gDpy, (EGLSyncKHR)P.boSync[i]); P.boSync[i] = NULL; }
 	for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
 		if (P.inflightSync[i]) { eglDestroySyncKHR(gDpy, (EGLSyncKHR)P.inflightSync[i]); P.inflightSync[i] = NULL; }
-	for (int i = 0; i < PRESENT_BO_COUNT; i++) {
-		if (P.boFbo[i]) glDeleteFramebuffers(1, &P.boFbo[i]);
-		if (P.boTex[i]) glDeleteTextures(1, &P.boTex[i]);
-		if (P.boEglImage[i]) eglDestroyImageKHR(gDpy, (EGLImageKHR)(uintptr_t)P.boEglImage[i]);
-		if (P.fbs[i]) p_drmModeRmFB(P.drmfd, P.fbs[i]);
-		if (P.bos[i]) p_gbm_bo_destroy(P.bos[i]);
+	usleep(2 * P.periodUs);
+
+	// 3. Take the CRTC off our FBs before they are removed. Removing an FB
+	//    that is being scanned out makes the kernel disable the CRTC behind
+	//    our back. Put back what was on screen when the chain started (SDL's
+	//    own FB, still alive here), or disable the CRTC explicitly if that is
+	//    not usable. SetCrtc needs master: harmless EACCES if we lost it.
+	{
+		int rc;
+		if (gCrtc && gCrtc->buffer_id && gCrtc->mode_valid)
+			rc = p_drmModeSetCrtc(P.drmfd, gCrtcId, gCrtc->buffer_id, gCrtc->x, gCrtc->y,
+			                      &gConnId, 1, &gCrtc->mode);
+		else
+			rc = p_drmModeSetCrtc(P.drmfd, gCrtcId, 0, 0, 0, NULL, 0, NULL);
+		if (rc != 0 && gCrtc && gCrtc->buffer_id) {
+			// the saved FB is gone: disable instead of leaving it dangling
+			rc = p_drmModeSetCrtc(P.drmfd, gCrtcId, 0, 0, 0, NULL, 0, NULL);
+			printf("[present] shutdown: saved crtc fb unusable, crtc disabled rc=%d\n", rc);
+		} else {
+			printf("[present] shutdown: crtc %s rc=%d\n",
+			       (gCrtc && gCrtc->buffer_id && gCrtc->mode_valid) ? "restored" : "disabled", rc);
+		}
+		fflush(stdout);
 	}
-	if (gCrtc) p_drmModeFreeCrtc(gCrtc);
-	if (gConn) p_drmModeFreeConnector(gConn);
-	if (P.drmfd >= 0) close(P.drmfd);
-	P.inited = 0;
+
+	// 4. GL objects on the main context, then the FBs and the bos.
+	for (int i = 0; i < PRESENT_BO_COUNT; i++) {
+		if (P.boFbo[i]) { glDeleteFramebuffers(1, &P.boFbo[i]); P.boFbo[i] = 0; }
+		if (P.boTex[i]) { glDeleteTextures(1, &P.boTex[i]); P.boTex[i] = 0; }
+		if (P.boEglImage[i]) { eglDestroyImageKHR(gDpy, (EGLImageKHR)(uintptr_t)P.boEglImage[i]); P.boEglImage[i] = 0; }
+		if (P.fbs[i]) { p_drmModeRmFB(P.drmfd, P.fbs[i]); P.fbs[i] = 0; }
+		if (P.bos[i]) { p_gbm_bo_destroy(P.bos[i]); P.bos[i] = NULL; }
+		P.boState[i] = BO_DEAD;
+	}
+
+	// 5. the present (share) context. The gbm device and EGL display belong to
+	//    SDL and are released by it.
+	if (gCtx != EGL_NO_CONTEXT && p_eglDestroyContext) p_eglDestroyContext(gDpy, gCtx);
+	gCtx = EGL_NO_CONTEXT;
+
+	if (gCrtc) { p_drmModeFreeCrtc(gCrtc); gCrtc = NULL; }
+	if (gConn) { p_drmModeFreeConnector(gConn); gConn = NULL; }
+	// 6. only close an fd we opened; the fd SDL handed over is SDL's (it still
+	//    restores the display and destroys its gbm device through it).
+	if (P.ownFd && P.drmfd >= 0) {
+		p_drmDropMaster(P.drmfd);
+		close(P.drmfd);
+	}
+	P.drmfd = -1; P.ownFd = 0;
+	printf("[present] shutdown: done\n"); fflush(stdout);
 }
 #endif // PRESENT_USE_KMS
